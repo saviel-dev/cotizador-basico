@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sellder - Cotizador para Línea Blanca">
+    <meta name="theme-color" content="#1e3a8a">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <title>Sellder - Cotizador</title>
+    
+    <!-- Tailwind CSS (Simula Shadcn UI) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- html2canvas para descargar la imagen -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        /* Animaciones base simulando Shadcn */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .animate-in { animation: fadeIn 0.2s ease-out forwards; }
+        .zoom-in { animation: zoomIn 0.2s ease-out forwards; }
+        
+        /* Ocultar elementos */
+        .hidden { display: none !important; }
+
+        /* Fondo dinámico */
+        #bg-layer {
+            background-image: url('imgs/bg.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            transition: filter 0.5s ease;
+        }
+        .bg-blur {
+            filter: blur(5px);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-900 font-sans min-h-screen overflow-x-hidden">
+    <!-- Capa de fondo dinámica -->
+    <div id="bg-layer" class="fixed inset-0 z-[-1]"></div>
+
+    <!-- ==================== PANTALLA DE LOGIN ==================== -->
+    <div id="login-view" class="min-h-screen flex items-center justify-center p-4">
+        <div class="rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm w-full max-w-sm p-6 animate-in zoom-in">
+            <div class="flex flex-col items-center space-y-2 text-center mb-6">
+                <img src="imgs/logo.png" alt="Sellder Logo" class="h-16 w-auto mb-2">
+                <h1 class="text-2xl font-semibold tracking-tight text-blue-900">Sellder</h1>
+                <p class="text-sm text-slate-500">Cotizador para Línea Blanca</p>
+            </div>
+
+            <form id="login-form" class="space-y-4">
+                <div class="bg-blue-50 border border-blue-200 text-blue-800 text-xs p-3 rounded-md mb-4">
+                    Datos de acceso: usuario <strong>demo</strong>, clave <strong>demo</strong>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-slate-700">Usuario</label>
+                    <input type="text" id="login-user" required class="flex h-9 w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                </div>
+
+                <div class="space-y-2 relative">
+                    <label class="text-sm font-medium text-slate-700">Contraseña</label>
+                    <input type="password" id="login-pass" required class="flex h-9 w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm pr-10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    <button type="button" id="toggle-pass" class="absolute right-3 top-8 text-slate-500 hover:text-blue-700 transition-colors">
+                        <i data-lucide="eye" id="eye-icon" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <p id="login-error" class="text-sm font-medium text-red-500 hidden">Credenciales incorrectas.</p>
+
+                <button type="submit" class="w-full mt-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
+                    Iniciar Sesión
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== APLICACIÓN PRINCIPAL ==================== -->
+    <div id="app-view" class="hidden">
+        <!-- Navbar -->
+        <nav class="bg-blue-900 text-white shadow-md sticky top-0 z-10">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center gap-2">
+                        <img src="imgs/logo.png" alt="Sellder Logo" class="h-8 w-auto bg-white rounded-md p-1">
+                        <span class="font-semibold text-xl tracking-tight text-white">Sellder</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 sm:gap-6">
+                        <button id="nav-products" class="text-sm font-medium transition-colors flex items-center gap-2 h-16 border-b-2 px-1 border-transparent text-blue-200 hover:text-white">
+                            <i data-lucide="package" class="w-4 h-4"></i>
+                            <span>Productos</span>
+                        </button>
+                        <button id="nav-quotes" class="text-sm font-medium transition-colors flex items-center gap-2 h-16 border-b-2 px-1 border-white text-white">
+                            <i data-lucide="calculator" class="w-4 h-4"></i>
+                            <span>Cotizar</span>
+                        </button>
+                        
+                        <div class="w-px h-6 bg-blue-800 mx-2"></div>
+                        
+                        <button id="nav-logout" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-red-600 text-white shadow-sm hover:bg-red-700 h-8 px-3 flex gap-2">
+                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                            <span>Salir</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Contenedor Principal -->
+        <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in">
+            
+            <!-- VISTA: PRODUCTOS -->
+            <div id="products-view" class="hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold tracking-tight text-white">Productos</h2>
+                    <p class="text-sm text-slate-300">Gestione el inventario de línea blanca.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-6 h-fit md:col-span-1">
+                        <h3 class="font-semibold text-slate-900 mb-4">Agregar Producto</h3>
+                        <form id="add-product-form" class="space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Nombre del Producto</label>
+                                <input type="text" id="prod-name" required placeholder="Ej: Lavadora 10kg" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Precio (CLP)</label>
+                                <input type="number" id="prod-price" required placeholder="Ej: 250000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Categoría</label>
+                                <input type="text" id="prod-cat" placeholder="Ej: Lavado" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <button type="submit" class="w-full inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-9 px-4 py-2">
+                                Agregar Producto
+                            </button>
+                        </form>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm md:col-span-2 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 bg-slate-50 border-b border-slate-200 uppercase">
+                                    <tr>
+                                        <th class="px-6 py-3 font-medium">Producto</th>
+                                        <th class="px-6 py-3 font-medium">Categoría</th>
+                                        <th class="px-6 py-3 font-medium text-right">Precio</th>
+                                        <th class="px-6 py-3 font-medium text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-table-body" class="divide-y divide-slate-200">
+                                    <!-- Renderizado por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: COTIZACIONES -->
+            <div id="quotes-view" class="space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight text-white">Cotizaciones</h2>
+                        <p class="text-sm text-slate-300">Genere y administre cotizaciones de clientes.</p>
+                    </div>
+                    <div class="flex bg-slate-100 p-1 rounded-md w-fit border border-slate-200">
+                        <button id="tab-new" class="px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm">Nueva Cotización</button>
+                        <button id="tab-history" class="px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900">Historial</button>
+                    </div>
+                </div>
+
+                <!-- Pestaña Nueva Cotización -->
+                <div id="new-quote-container" class="rounded-xl border border-slate-200 bg-white shadow-sm p-8 max-w-4xl mx-auto">
+                    <!-- Indicador de pasos -->
+                    <div id="step-indicators" class="flex items-center justify-between mb-8 w-full max-w-3xl mx-auto overflow-x-auto text-xs px-2 sm:px-0">
+                        <!-- Renderizado por JS -->
+                    </div>
+
+                    <!-- PASO 1 -->
+                    <div id="step-1" class="step-content space-y-6 max-w-md mx-auto hidden">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-900">Datos del Cliente</h3>
+                            <p class="text-sm text-slate-500">Ingrese la información básica para la cotización.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-slate-700">Nombre Completo / Empresa</label>
+                            <input type="text" id="quote-customer" placeholder="Ej: Juan Pérez" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-slate-700">Teléfono</label>
+                            <input type="tel" id="quote-phone" placeholder="Ej: +56 9 1234 5678" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                        <div class="flex justify-end pt-4">
+                            <button onclick="changeStep(2)" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
+                                Siguiente <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASO 2 -->
+                    <div id="step-2" class="step-content space-y-6 hidden">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-900">Selección de Productos</h3>
+                            <p class="text-sm text-slate-500">Añada los productos a cotizar.</p>
+                        </div>
+                        <div class="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <div class="flex-1 w-full space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Producto</label>
+                                <select id="quote-product-select" class="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                                    <option value="">-- Seleccionar --</option>
+                                    <!-- Renderizado JS -->
+                                </select>
+                            </div>
+                            <div class="w-full md:w-32 space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Cantidad</label>
+                                <input type="number" id="quote-qty" min="1" value="1" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <button onclick="addQuoteItem()" class="w-full md:w-auto shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-9 px-4 py-2">
+                                <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Añadir
+                            </button>
+                        </div>
+
+                        <div id="quote-items-container" class="border border-slate-200 rounded-lg overflow-hidden hidden">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-2 font-medium">Producto</th>
+                                        <th class="px-4 py-2 font-medium text-center">Cant.</th>
+                                        <th class="px-4 py-2 font-medium text-right">Subtotal</th>
+                                        <th class="px-4 py-2 font-medium text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quote-items-body" class="divide-y divide-slate-100">
+                                    <!-- Renderizado JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="quote-items-empty" class="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-lg">
+                            <i data-lucide="shopping-cart" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                            <p class="text-sm">No hay productos en la cotización.</p>
+                        </div>
+
+                        <div class="flex justify-between pt-4 border-t border-slate-100">
+                            <button onclick="changeStep(1)" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 h-9 px-4 py-2">
+                                <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i> Atrás
+                            </button>
+                            <button onclick="changeStep(3)" id="btn-next-step2" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Siguiente <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASO 3 -->
+                    <div id="step-3" class="step-content space-y-6 max-w-md mx-auto hidden">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-900">Servicio de Instalación</h3>
+                            <p class="text-sm text-slate-500">Especifique si el cliente requiere armado o instalación.</p>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Detalle del Servicio</label>
+                                <input type="text" id="quote-install-name" value="Servicio de Armado en Casa" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Costo (CLP) - Dejar en blanco si no aplica</label>
+                                <input type="number" id="quote-install-price" placeholder="Ej: 25000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                        </div>
+                        <div class="flex justify-between pt-4 border-t border-slate-100">
+                            <button onclick="changeStep(2)" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 h-9 px-4 py-2">
+                                <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i> Atrás
+                            </button>
+                            <button onclick="changeStep(4)" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
+                                Siguiente <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASO 4 -->
+                    <div id="step-4" class="step-content space-y-6 max-w-md mx-auto hidden">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-900">Despacho</h3>
+                            <p class="text-sm text-slate-500">Agregue el costo de envío a domicilio si es necesario.</p>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Destino o Detalle</label>
+                                <input type="text" id="quote-ship-name" value="Despacho a Domicilio" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Costo de Envío (CLP) - Dejar en blanco si no aplica</label>
+                                <input type="number" id="quote-ship-price" placeholder="Ej: 15000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                        </div>
+                        <div class="flex justify-between pt-4 border-t border-slate-100">
+                            <button onclick="changeStep(3)" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 h-9 px-4 py-2">
+                                <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i> Atrás
+                            </button>
+                            <button onclick="goToSummary()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
+                                Ver Resumen <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASO 5 -->
+                    <div id="step-5" class="step-content space-y-6 hidden">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-900">Resumen de Cotización</h3>
+                            <p class="text-sm text-slate-500">Verifique los datos antes de guardar.</p>
+                        </div>
+
+                        <div id="quote-summary-render">
+                            <!-- Renderizado JS (La misma card de la imagen) -->
+                        </div>
+
+                        <div class="flex justify-between pt-4 max-w-md mx-auto w-full">
+                            <button onclick="changeStep(4)" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 h-9 px-4 py-2">
+                                <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i> Editar Detalles
+                            </button>
+                            <button onclick="saveQuote()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 shadow-sm h-9 px-4 py-2">
+                                <i data-lucide="check" class="w-4 h-4 mr-2"></i> Confirmar y Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pestaña Historial -->
+                <div id="history-container" class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden hidden">
+                    <div id="history-empty" class="text-center py-12 text-slate-500 hidden">
+                        <i data-lucide="history" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
+                        <p>No hay cotizaciones registradas.</p>
+                    </div>
+                    <div id="history-list" class="divide-y divide-slate-100">
+                        <!-- Renderizado JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== MODAL DE DETALLES ==================== -->
+    <div id="quote-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm transition-all hidden">
+        <div class="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative animate-in zoom-in">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1 transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-semibold text-slate-900 text-lg">Detalle de Cotización</h3>
+                    <button id="modal-download-btn" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-8 px-3">
+                        <i data-lucide="download" class="w-4 h-4 mr-2"></i> Descargar Imagen
+                    </button>
+                </div>
+                <div id="modal-content">
+                    <!-- Renderizado JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor oculto para html2canvas -->
+    <div id="hidden-capture-container" class="fixed top-0 left-0 w-[500px] z-[-10] opacity-0 pointer-events-none"></div>
+
+    <script>
+        // ==================== ESTADO Y DATOS ====================
+        const formatCLP = (amount) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(amount);
+
+        const defaultProducts = [
+            { id: '1', name: 'Refrigerador No Frost 300L', price: 390000, category: 'Refrigeración' },
+            { id: '2', name: 'Estufa a Gas 15kg', price: 95000, category: 'Climatización' },
+            { id: '3', name: 'Cocina Fensa 4 Quemadores', price: 180000, category: 'Cocción' },
+            { id: '4', name: 'Microondas Thomas 20L', price: 55000, category: 'Electrodomésticos' },
+        ];
+
+        let state = {
+            isLoggedIn: JSON.parse(localStorage.getItem('sellder_auth')) || false,
+            products: JSON.parse(localStorage.getItem('sellder_products')) || defaultProducts,
+            quotes: JSON.parse(localStorage.getItem('sellder_quotes')) || [],
+            currentView: 'quotes', // 'products', 'quotes'
+            activeTab: 'new', // 'new', 'history'
+            
+            // Estado del Wizard
+            step: 1,
+            customer: '',
+            phone: '',
+            currentItems: [],
+            installName: 'Servicio de Armado en Casa',
+            installPrice: '',
+            shippingName: 'Despacho a Domicilio',
+            shippingPrice: '',
+            
+            // Modal state
+            selectedQuoteId: null
+        };
+
+        const saveState = () => {
+            localStorage.setItem('sellder_auth', JSON.stringify(state.isLoggedIn));
+            localStorage.setItem('sellder_products', JSON.stringify(state.products));
+            localStorage.setItem('sellder_quotes', JSON.stringify(state.quotes));
+        };
+
+        // ==================== INICIALIZACIÓN ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            checkAuth();
+            setupEventListeners();
+        });
+
+        // ==================== NAVEGACIÓN Y VISTAS ====================
+        const checkAuth = () => {
+            const bgLayer = document.getElementById('bg-layer');
+            if (state.isLoggedIn) {
+                document.getElementById('login-view').classList.add('hidden');
+                document.getElementById('app-view').classList.remove('hidden');
+                if (bgLayer) bgLayer.classList.add('bg-blur');
+                renderApp();
+            } else {
+                document.getElementById('login-view').classList.remove('hidden');
+                document.getElementById('app-view').classList.add('hidden');
+                if (bgLayer) bgLayer.classList.remove('bg-blur');
+            }
+        };
+
+        const renderApp = () => {
+            // Manejar Vistas (Productos vs Cotizaciones)
+            const btnProducts = document.getElementById('nav-products');
+            const btnQuotes = document.getElementById('nav-quotes');
+            const viewProducts = document.getElementById('products-view');
+            const viewQuotes = document.getElementById('quotes-view');
+
+            if (state.currentView === 'products') {
+                viewProducts.classList.remove('hidden');
+                viewQuotes.classList.add('hidden');
+                btnProducts.classList.replace('border-transparent', 'border-white');
+                btnProducts.classList.replace('text-blue-200', 'text-white');
+                btnQuotes.classList.replace('border-white', 'border-transparent');
+                btnQuotes.classList.replace('text-white', 'text-blue-200');
+                renderProductsTable();
+            } else {
+                viewProducts.classList.add('hidden');
+                viewQuotes.classList.remove('hidden');
+                btnQuotes.classList.replace('border-transparent', 'border-white');
+                btnQuotes.classList.replace('text-blue-200', 'text-white');
+                btnProducts.classList.replace('border-white', 'border-transparent');
+                btnProducts.classList.replace('text-white', 'text-blue-200');
+                renderQuotesTabs();
+            }
+            lucide.createIcons();
+        };
+
+        const renderQuotesTabs = () => {
+            const btnNew = document.getElementById('tab-new');
+            const btnHistory = document.getElementById('tab-history');
+            const contNew = document.getElementById('new-quote-container');
+            const contHistory = document.getElementById('history-container');
+
+            if (state.activeTab === 'new') {
+                contNew.classList.remove('hidden');
+                contHistory.classList.add('hidden');
+                
+                btnNew.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
+                btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
+                
+                renderWizard();
+            } else {
+                contNew.classList.add('hidden');
+                contHistory.classList.remove('hidden');
+                
+                btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
+                btnNew.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
+                
+                renderHistory();
+            }
+        };
+
+        // ==================== LÓGICA DE PRODUCTOS ====================
+        const renderProductsTable = () => {
+            const tbody = document.getElementById('products-table-body');
+            tbody.innerHTML = '';
+            
+            if (state.products.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="4" class="px-6 py-4 text-center text-slate-500">No hay productos registrados.</td></tr>`;
+                return;
+            }
+
+            state.products.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-slate-900">${p.name}</td>
+                    <td class="px-6 py-4 text-slate-500">
+                        <span class="inline-flex items-center rounded-full bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-600/20">${p.category}</span>
+                    </td>
+                    <td class="px-6 py-4 text-right font-medium text-slate-900">${formatCLP(p.price)}</td>
+                    <td class="px-6 py-4 text-center">
+                        <button onclick="deleteProduct('${p.id}')" class="text-slate-400 hover:text-red-600 p-1">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        };
+
+        const deleteProduct = (id) => {
+            state.products = state.products.filter(p => p.id !== id);
+            saveState();
+            renderProductsTable();
+        };
+
+        // ==================== LÓGICA DEL WIZARD (NUEVA COTIZACIÓN) ====================
+        const renderWizard = () => {
+            // Render Step Indicators
+            const indicatorCont = document.getElementById('step-indicators');
+            const steps = [
+                { num: 1, label: 'Cliente' }, { num: 2, label: 'Productos' },
+                { num: 3, label: 'Armado' }, { num: 4, label: 'Despacho' }, { num: 5, label: 'Resumen' }
+            ];
+            
+            let indHtml = '';
+            steps.forEach((s, idx) => {
+                const isPast = state.step >= s.num;
+                indHtml += `
+                    <div class="flex flex-col items-center flex-shrink-0 ${isPast ? 'text-blue-700' : 'text-slate-400'}">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center border-2 font-bold mb-1 ${isPast ? 'border-blue-700 bg-blue-50' : 'border-slate-300'}">${s.num}</div>
+                        <span class="font-medium">${s.label}</span>
+                    </div>
+                    ${idx < 4 ? `<div class="flex-1 h-px mx-2 sm:mx-4 min-w-[20px] ${state.step > s.num ? 'bg-blue-700' : 'bg-slate-300'}"></div>` : ''}
+                `;
+            });
+            indicatorCont.innerHTML = indHtml;
+
+            // Mostrar solo el contenido del paso actual
+            document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`step-${state.step}`).classList.remove('hidden');
+
+            // Actualizaciones específicas por paso
+            if (state.step === 2) {
+                // Llenar select de productos
+                const select = document.getElementById('quote-product-select');
+                select.innerHTML = '<option value="">-- Seleccionar --</option>';
+                state.products.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = `${p.name} (${formatCLP(p.price)})`;
+                    select.appendChild(opt);
+                });
+                renderQuoteItems();
+            }
+
+            lucide.createIcons();
+        };
+
+        const changeStep = (newStep) => {
+            // Guardar datos temporales antes de cambiar
+            if (state.step === 1) {
+                state.customer = document.getElementById('quote-customer').value;
+                state.phone = document.getElementById('quote-phone').value;
+                if (!state.customer.trim()) return; // Validación básica
+            }
+            if (state.step === 3) {
+                state.installName = document.getElementById('quote-install-name').value;
+                state.installPrice = document.getElementById('quote-install-price').value;
+            }
+            if (state.step === 4) {
+                state.shippingName = document.getElementById('quote-ship-name').value;
+                state.shippingPrice = document.getElementById('quote-ship-price').value;
+            }
+
+            state.step = newStep;
+            renderWizard();
+        };
+
+        const goToSummary = () => {
+            changeStep(5);
+            // Renderizar resumen
+            document.getElementById('quote-summary-render').innerHTML = generateSummaryHTML(getCurrentQuoteObj());
+        };
+
+        const getCurrentQuoteObj = () => {
+            let total = state.currentItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const installPriceInt = parseInt(state.installPrice) || 0;
+            const shipPriceInt = parseInt(state.shippingPrice) || 0;
+            total += installPriceInt + shipPriceInt;
+
+            return {
+                customer: state.customer,
+                phone: state.phone,
+                items: state.currentItems,
+                total: total,
+                install: state.installName ? { name: state.installName, price: installPriceInt } : null,
+                shipping: state.shippingName ? { name: state.shippingName, price: shipPriceInt } : null
+            };
+        };
+
+        const renderQuoteItems = () => {
+            const tbody = document.getElementById('quote-items-body');
+            const emptyState = document.getElementById('quote-items-empty');
+            const tableCont = document.getElementById('quote-items-container');
+            const btnNext = document.getElementById('btn-next-step2');
+
+            if (state.currentItems.length === 0) {
+                tableCont.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                btnNext.disabled = true;
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tableCont.classList.remove('hidden');
+            btnNext.disabled = false;
+            tbody.innerHTML = '';
+
+            state.currentItems.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-medium text-slate-900">${item.name}</td>
+                    <td class="px-4 py-3 text-center text-slate-600">${item.quantity}</td>
+                    <td class="px-4 py-3 text-right text-slate-900">${formatCLP(item.price * item.quantity)}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="removeQuoteItem('${item.productId}')" class="text-slate-400 hover:text-red-600 p-1">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        };
+
+        const addQuoteItem = () => {
+            const select = document.getElementById('quote-product-select');
+            const qtyInput = document.getElementById('quote-qty');
+            const prodId = select.value;
+            const qty = parseInt(qtyInput.value) || 1;
+
+            if (!prodId || qty < 1) return;
+
+            const product = state.products.find(p => p.id === prodId);
+            if (!product) return;
+
+            const existing = state.currentItems.find(i => i.productId === prodId);
+            if (existing) {
+                existing.quantity += qty;
+            } else {
+                state.currentItems.push({
+                    productId: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: qty
+                });
+            }
+            
+            select.value = '';
+            qtyInput.value = 1;
+            renderQuoteItems();
+        };
+
+        const removeQuoteItem = (productId) => {
+            state.currentItems = state.currentItems.filter(i => i.productId !== productId);
+            renderQuoteItems();
+        };
+
+        const saveQuote = () => {
+            const newQuote = {
+                id: Date.now().toString(),
+                date: new Date().toLocaleDateString('es-CL'),
+                ...getCurrentQuoteObj()
+            };
+
+            state.quotes.unshift(newQuote);
+            saveState();
+
+            // Reset
+            state.customer = '';
+            state.phone = '';
+            state.currentItems = [];
+            state.installName = 'Servicio de Armado en Casa';
+            state.installPrice = '';
+            state.shippingName = 'Despacho a Domicilio';
+            state.shippingPrice = '';
+            document.getElementById('quote-customer').value = '';
+            document.getElementById('quote-phone').value = '';
+            
+            state.step = 1;
+            state.activeTab = 'history';
+            renderApp();
+        };
+
+        // ==================== PLANTILLA DE RESUMEN (IMAGEN/MODAL) ====================
+        const generateSummaryHTML = (quote) => {
+            const hasServices = (quote.install && quote.install.name) || (quote.shipping && quote.shipping.name) || quote.caract1 || quote.caract2 || quote.caracteristica1 || quote.caracteristica2;
+            
+            // Retrocompatibilidad
+            const srv1 = quote.install || quote.caract1;
+            const srv2 = quote.shipping || quote.caract2;
+            const old1 = quote.caracteristica1;
+            const old2 = quote.caracteristica2;
+
+            let servicesHtml = '';
+            if (hasServices) {
+                servicesHtml = `<div class="mt-6 space-y-4">`;
+                if (srv1) servicesHtml += `<div class="flex justify-between items-start text-[#475569] text-[16px]"><span class="pr-4">+ ${srv1.name}</span><span class="whitespace-nowrap">${formatCLP(srv1.price || 0)}</span></div>`;
+                if (srv2) servicesHtml += `<div class="flex justify-between items-start text-[#475569] text-[16px]"><span class="pr-4">+ ${srv2.name}</span><span class="whitespace-nowrap">${formatCLP(srv2.price || 0)}</span></div>`;
+                if (old1) servicesHtml += `<div class="text-[#475569] text-[16px]">+ ${old1}</div>`;
+                if (old2) servicesHtml += `<div class="text-[#475569] text-[16px]">+ ${old2}</div>`;
+                servicesHtml += `</div>`;
+            }
+
+            return `
+                <div class="bg-[#f8fafc] border border-slate-200 rounded-xl p-8 max-w-md mx-auto shadow-sm text-left font-sans capture-target">
+                    <div class="mb-6">
+                        <p class="text-[15px] font-medium text-slate-500 mb-1">Cliente</p>
+                        <p class="text-[22px] font-bold text-[#1e293b] leading-tight">${quote.customer || "Sin nombre"}</p>
+                        ${quote.phone ? `<p class="text-[16px] text-slate-600 mt-1">${quote.phone}</p>` : ''}
+                        ${quote.date ? `<p class="text-[14px] text-slate-400 mt-1">${quote.date}</p>` : ''}
+                    </div>
+                    <hr class="border-slate-200 mb-6" />
+                    <div class="mb-6">
+                        <p class="text-[16px] font-medium text-slate-500 mb-5">Desglose de productos</p>
+                        <div class="space-y-4">
+                            ${quote.items.map(item => `
+                                <div class="flex justify-between items-start">
+                                    <span class="font-bold text-[#1e293b] text-[16px] pr-4">${item.quantity > 1 ? item.quantity + 'x ' : ''}${item.name}</span>
+                                    <span class="font-bold text-[#1e293b] text-[16px] whitespace-nowrap">${formatCLP(item.price * item.quantity)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${servicesHtml}
+                    </div>
+                    <hr class="border-slate-200 mb-6" />
+                    <div class="flex justify-between items-center">
+                        <span class="text-[20px] font-bold text-[#1e293b]">Total Estimado:</span>
+                        <span class="text-[24px] font-bold text-[#0f172a]">${formatCLP(quote.total)}</span>
+                    </div>
+                </div>
+            `;
+        };
+
+        // ==================== HISTORIAL Y DESCARGA ====================
+        const renderHistory = () => {
+            const list = document.getElementById('history-list');
+            const empty = document.getElementById('history-empty');
+
+            if (state.quotes.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            let html = '';
+            
+            state.quotes.forEach(quote => {
+                html += `
+                    <div class="p-6 hover:bg-slate-50 transition-colors">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                            <div>
+                                <h4 class="font-semibold text-slate-900 text-lg">${quote.customer}</h4>
+                                <div class="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                                    ${quote.phone ? `<span>Tel: ${quote.phone}</span>` : ''}
+                                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">${quote.date}</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col md:items-end gap-2 w-full md:w-auto">
+                                <div class="text-xl font-bold text-blue-900">${formatCLP(quote.total)}</div>
+                                <div class="flex gap-2">
+                                    <button onclick="openModal('${quote.id}')" class="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-slate-100">
+                                        <i data-lucide="eye" class="w-4 h-4 mr-1.5"></i> Ver Detalles
+                                    </button>
+                                    <button onclick="downloadQuote('${quote.id}')" class="inline-flex items-center rounded-md bg-purple-100 px-3 py-1 text-sm text-purple-900 hover:bg-purple-200">
+                                        <i data-lucide="download" class="w-4 h-4 mr-1.5"></i> Descargar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-slate-100 rounded-md p-3">
+                            <p class="text-sm font-medium text-slate-600 mb-2">Resumen rápido:</p>
+                            <ul class="text-sm space-y-1">
+                                ${quote.items.map(item => `
+                                    <li class="flex justify-between text-slate-600">
+                                        <span>${item.quantity}x ${item.name}</span>
+                                        <span class="text-slate-400">${formatCLP(item.price * item.quantity)}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+        };
+
+        const openModal = (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+            state.selectedQuoteId = id;
+            document.getElementById('modal-content').innerHTML = generateSummaryHTML(quote);
+            document.getElementById('quote-modal').classList.remove('hidden');
+        };
+
+        const closeModal = () => {
+            document.getElementById('quote-modal').classList.add('hidden');
+            state.selectedQuoteId = null;
+        };
+
+        const downloadQuote = async (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+
+            // Renderizamos en el div oculto para garantizar el estilo sin afectar la UI visible
+            const hiddenCont = document.getElementById('hidden-capture-container');
+            hiddenCont.innerHTML = generateSummaryHTML(quote);
+            
+            // Pequeño delay para asegurar que el DOM se pintó
+            setTimeout(async () => {
+                try {
+                    const target = hiddenCont.querySelector('.capture-target');
+                    const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#f8fafc' });
+                    const link = document.createElement('a');
+                    link.download = `Cotizacion_${quote.customer.replace(/\s+/g, '_')}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    hiddenCont.innerHTML = ''; // Limpiar
+                } catch (err) {
+                    console.error("Error generando imagen", err);
+                }
+            }, 100);
+        };
+
+        // ==================== EVENT LISTENERS ESTATICOS ====================
+        const setupEventListeners = () => {
+            // Login
+            document.getElementById('login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const u = document.getElementById('login-user').value;
+                const p = document.getElementById('login-pass').value;
+                if (u === 'demo' && p === 'demo') {
+                    state.isLoggedIn = true;
+                    saveState();
+                    checkAuth();
+                } else {
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            });
+
+            // Toggle Password visibility
+            document.getElementById('toggle-pass').addEventListener('click', () => {
+                const input = document.getElementById('login-pass');
+                const icon = document.getElementById('eye-icon');
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.setAttribute('data-lucide', 'eye-off');
+                } else {
+                    input.type = 'password';
+                    icon.setAttribute('data-lucide', 'eye');
+                }
+                lucide.createIcons();
+            });
+
+            // Navegación
+            document.getElementById('nav-logout').addEventListener('click', () => {
+                state.isLoggedIn = false;
+                saveState();
+                checkAuth();
+            });
+            document.getElementById('nav-products').addEventListener('click', () => {
+                state.currentView = 'products';
+                renderApp();
+            });
+            document.getElementById('nav-quotes').addEventListener('click', () => {
+                state.currentView = 'quotes';
+                renderApp();
+            });
+            document.getElementById('tab-new').addEventListener('click', () => {
+                state.activeTab = 'new';
+                renderQuotesTabs();
+            });
+            document.getElementById('tab-history').addEventListener('click', () => {
+                state.activeTab = 'history';
+                renderQuotesTabs();
+            });
+
+            // Agregar Producto
+            document.getElementById('add-product-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const nameInput = document.getElementById('prod-name');
+                const priceInput = document.getElementById('prod-price');
+                const catInput = document.getElementById('prod-cat');
+                
+                state.products.push({
+                    id: Date.now().toString(),
+                    name: nameInput.value,
+                    price: parseInt(priceInput.value),
+                    category: catInput.value || 'General'
+                });
+                saveState();
+                renderProductsTable();
+                
+                nameInput.value = '';
+                priceInput.value = '';
+                catInput.value = '';
+            });
+
+            // Botón descargar desde el modal
+            document.getElementById('modal-download-btn').addEventListener('click', () => {
+                if (state.selectedQuoteId) downloadQuote(state.selectedQuoteId);
+            });
+        };
+    </script>
+</body>
+</html>
