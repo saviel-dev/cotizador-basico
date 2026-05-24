@@ -364,9 +364,9 @@
                         <h2 class="text-2xl font-bold tracking-tight text-white">Cotizaciones</h2>
                         <p class="text-sm text-slate-300">Genere y administre cotizaciones de clientes.</p>
                     </div>
-                    <div class="flex bg-slate-100 p-1 rounded-md w-fit border border-slate-200">
-                        <button id="tab-new" class="px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm">Nueva Cotización</button>
-                        <button id="tab-history" class="px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900">Historial</button>
+                    <div class="flex bg-slate-100 p-1 rounded-md w-full sm:w-fit border border-slate-200 mx-auto sm:mx-0">
+                        <button id="tab-new" class="flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm text-center">Nueva Cotización</button>
+                        <button id="tab-history" class="flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900 text-center">Historial</button>
                     </div>
                 </div>
 
@@ -390,7 +390,7 @@
                     <!-- Tarjeta Wizard (Izquierda en Desktop, Arriba en Mobile) -->
                     <div class="lg:w-2/3 order-1 lg:order-1 rounded-xl border border-slate-200 bg-white shadow-sm p-8">
                         <!-- Indicador de pasos -->
-                        <div id="step-indicators" class="flex items-center justify-between mb-8 w-full max-w-3xl mx-auto overflow-x-auto text-xs px-2 sm:px-0">
+                        <div id="step-indicators" class="flex items-center justify-between mb-8 pb-4 w-full max-w-3xl mx-auto overflow-x-auto text-xs px-2 sm:px-0">
                         <!-- Renderizado por JS -->
                     </div>
 
@@ -896,18 +896,21 @@
             const btnHistory = document.getElementById('tab-history');
             const contNew = document.getElementById('new-quote-container');
             const contHistory = document.getElementById('history-container');
+            
+            const activeClass = "flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm text-center transition-colors";
+            const inactiveClass = "flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900 text-center transition-colors";
 
             if (state.activeTab === 'new') {
                 contNew.classList.remove('hidden');
                 contHistory.classList.add('hidden');
-                btnNew.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
-                btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
+                btnNew.className = activeClass;
+                btnHistory.className = inactiveClass;
                 renderWizard();
             } else {
                 contNew.classList.add('hidden');
                 contHistory.classList.remove('hidden');
-                btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
-                btnNew.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
+                btnHistory.className = activeClass;
+                btnNew.className = inactiveClass;
                 renderHistory();
             }
         };
@@ -1568,21 +1571,21 @@
                             </div>
                             <div class="flex items-center gap-3">
                                 <span class="text-lg font-bold text-slate-900">${formatCLP(quote.total)}</span>
-                                <div class="flex items-center gap-1">
-                                    <button onclick="openModal('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-colors" title="Ver detalle">
-                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="openModal('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-2 rounded-md hover:bg-blue-50 transition-colors" title="Ver detalle">
+                                        <i data-lucide="eye" class="w-5 h-5"></i>
                                     </button>
-                                    <button onclick="downloadPDF('${quote.id}')" class="text-slate-400 hover:text-purple-600 p-1.5 rounded-md hover:bg-purple-50 transition-colors" title="Descargar PDF">
-                                        <i data-lucide="file-down" class="w-4 h-4"></i>
+                                    <button onclick="downloadPDF('${quote.id}')" class="text-slate-400 hover:text-purple-600 p-2 rounded-md hover:bg-purple-50 transition-colors" title="Descargar PDF">
+                                        <i data-lucide="file-down" class="w-5 h-5"></i>
                                     </button>
-                                    <button onclick="shareWhatsApp('${quote.id}')" class="text-slate-400 hover:text-green-600 p-1.5 rounded-md hover:bg-green-50 transition-colors" title="Enviar WhatsApp">
-                                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                                    <button onclick="shareWhatsApp('${quote.id}')" class="text-slate-400 hover:text-green-600 p-2 rounded-md hover:bg-green-50 transition-colors" title="Enviar WhatsApp">
+                                        <i data-lucide="message-circle" class="w-5 h-5"></i>
                                     </button>
-                                    <button onclick="shareEmail('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-colors" title="Enviar Correo">
-                                        <i data-lucide="mail" class="w-4 h-4"></i>
+                                    <button onclick="shareEmail('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-2 rounded-md hover:bg-blue-50 transition-colors" title="Enviar Correo">
+                                        <i data-lucide="mail" class="w-5 h-5"></i>
                                     </button>
-                                    <button onclick="deleteQuote('${quote.id}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors" title="Eliminar">
-                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    <button onclick="deleteQuote('${quote.id}')" class="text-slate-400 hover:text-red-600 p-2 rounded-md hover:bg-red-50 transition-colors" title="Eliminar">
+                                        <i data-lucide="trash-2" class="w-5 h-5"></i>
                                     </button>
                                 </div>
                             </div>
@@ -1622,14 +1625,36 @@
                 const hiddenCont = document.getElementById('hidden-capture-container');
                 hiddenCont.innerHTML = generatePDFHTML(quote);
                 
-                // Parche Vercel Toolbar / oklch: deshabilitar temporalmente los <style> que contengan oklch
-                const badStyles = [];
-                document.querySelectorAll('style').forEach(el => {
-                    if (el.innerHTML.includes('oklch') || el.innerHTML.includes('color-mix')) {
-                        badStyles.push({ el, disabled: el.disabled });
-                        el.disabled = true;
+                // Parche robusto Vercel Toolbar / oklch: deshabilitar hojas de estilo problemáticas
+                const badSheets = [];
+                for (let i = 0; i < document.styleSheets.length; i++) {
+                    const sheet = document.styleSheets[i];
+                    try {
+                        let isBad = false;
+                        if (sheet.ownerNode && sheet.ownerNode.tagName.toLowerCase() === 'style') {
+                            const html = sheet.ownerNode.innerHTML || '';
+                            if (html.includes('oklch') || html.includes('color-mix')) isBad = true;
+                        }
+                        if (!isBad && sheet.cssRules) {
+                            for (let j = 0; j < sheet.cssRules.length; j++) {
+                                if (sheet.cssRules[j].cssText && (sheet.cssRules[j].cssText.includes('oklch') || sheet.cssRules[j].cssText.includes('color-mix'))) {
+                                    isBad = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (sheet.ownerNode && sheet.ownerNode.id && sheet.ownerNode.id.includes('vercel')) isBad = true;
+
+                        if (isBad) {
+                            badSheets.push({ sheet, disabled: sheet.disabled });
+                            sheet.disabled = true;
+                        }
+                    } catch (e) {
+                        // Errores CORS (hojas externas no permitidas), las bloqueamos por seguridad
+                        badSheets.push({ sheet, disabled: sheet.disabled });
+                        sheet.disabled = true;
                     }
-                });
+                }
                 
                 setTimeout(async () => {
                     try {
@@ -1646,11 +1671,11 @@
                         pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
                         
                         hiddenCont.innerHTML = '';
-                        badStyles.forEach(s => s.el.disabled = s.disabled);
+                        badSheets.forEach(s => s.sheet.disabled = s.disabled);
                         resolve(pdf);
                     } catch (err) {
                         hiddenCont.innerHTML = '';
-                        badStyles.forEach(s => s.el.disabled = s.disabled);
+                        badSheets.forEach(s => s.sheet.disabled = s.disabled);
                         reject(err);
                     }
                 }, 150);
