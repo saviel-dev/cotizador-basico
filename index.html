@@ -1710,56 +1710,53 @@
             return text;
         };
 
-        const shareWhatsApp = async (id) => {
+        const shareWhatsApp = (id) => {
             const quote = state.quotes.find(q => q.id === id);
             if (!quote) return;
             
-            showLoader('Preparando documento...');
-            try {
-                const pdf = await createPDF(quote);
-                const pdfBlob = pdf.output('blob');
-                const file = new File([pdfBlob], `Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+            const text = generateQuoteText(quote);
+            let phone = (quote.phone || '').replace(/\D/g, '');
+            if (phone && !phone.startsWith('56')) phone = '56' + phone;
+            
+            const url = phone 
+                ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+                : `https://wa.me/?text=${encodeURIComponent(text)}`;
+            
+            window.open(url, '_blank');
+        };
 
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        title: `Cotización Sellder - ${quote.customer}`,
-                        text: `Adjunto cotización solicitada.`,
-                        files: [file]
-                    });
-                } else {
-                    // Fallback to text + URL si canShare no es soportado
-                    const text = generateQuoteText(quote);
-                    let phone = (quote.phone || '').replace(/\D/g, '');
-                    if (phone && !phone.startsWith('56')) phone = '56' + phone;
-                    
-                    const url = phone 
-                        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-                        : `https://wa.me/?text=${encodeURIComponent(text)}`;
-                    
-                    // Descargar el PDF para que lo tengan a mano
-                    pdf.save(`Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`);
-                    
-                    showToast('PDF descargado. Envíalo manualmente (archivos no soportados por navegador).', 'error');
-                    setTimeout(() => window.open(url, '_blank'), 2000);
-                }
+        const shareEmail = async (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+
+            showLoader('Preparando PDF...');
+            try {
+                // 1. Generar y descargar el PDF
+                const pdf = await createPDF(quote);
+                const fileName = `Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`;
+                pdf.save(fileName);
+
+                // 2. Construir cuerpo del correo (sin markdown)
+                const cleanText = generateQuoteText(quote).replace(/\*/g, '').replace(/─/g, '-');
+                const subject = `Cotización Sellder - ${quote.customer}`;
+                const body = `Estimado/a ${quote.customer},\n\nAdjunto encontrará la cotización solicitada (archivo PDF descargado).\n\n${cleanText}\nQuedo a su disposición para cualquier consulta.\n\nSaludos,\nSellder`;
+                const email = quote.email || '';
+
+                // 3. Abrir Gmail compose con texto prellenado
+                const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+                // Pequeño delay para que el PDF se descargue primero
+                setTimeout(() => {
+                    window.open(gmailUrl, '_blank');
+                    showToast('📎 PDF descargado — adjúntalo al correo que se abrió', 'info');
+                }, 800);
+
             } catch (err) {
-                console.error("Error al compartir", err);
-                showToast('Error al preparar el documento', 'error');
+                console.error('Error generando PDF para correo', err);
+                showToast('Error al preparar el correo', 'error');
             } finally {
                 hideLoader();
             }
-        };
-
-        const shareEmail = (id) => {
-            const quote = state.quotes.find(q => q.id === id);
-            if (!quote) return;
-            
-            const subject = `Cotización - ${quote.customer}`;
-            const body = generateQuoteText(quote).replace(/\*/g, ''); // Sin markdown en email
-            const email = quote.email || '';
-            
-            const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            window.location.href = mailtoUrl;
         };
 
         // ==================== EVENT LISTENERS ====================
