@@ -8,24 +8,26 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <title>Sellder - Cotizador</title>
     
-    <!-- Tailwind CSS (Simula Shadcn UI) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (Pinned to v3 to avoid oklch colors which crash html2canvas) -->
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- html2canvas para descargar la imagen -->
+    <!-- jsPDF + html2canvas para PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
-        /* Animaciones base simulando Shadcn */
+        /* Animaciones base */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         
         .animate-in { animation: fadeIn 0.2s ease-out forwards; }
         .zoom-in { animation: zoomIn 0.2s ease-out forwards; }
+        .slide-up { animation: slideUp 0.25s ease-out forwards; }
         
-        /* Ocultar elementos */
         .hidden { display: none !important; }
 
         /* Fondo dinámico */
@@ -36,8 +38,72 @@
             background-attachment: fixed;
             transition: filter 0.5s ease;
         }
-        .bg-blur {
-            filter: blur(5px);
+        .bg-blur { filter: blur(5px); }
+
+        /* Autocomplete dropdown */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.15s;
+        }
+        .autocomplete-item:hover { background: #f0f4ff; }
+        .autocomplete-item .sub { color: #94a3b8; font-size: 0.75rem; }
+
+        /* Editable cells */
+        .editable-cell {
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            transition: border-color 0.15s;
+            min-width: 60px;
+            background: transparent;
+        }
+        .editable-cell:hover { border-color: #cbd5e1; }
+        .editable-cell:focus {
+            border-color: #3b82f6;
+            outline: none;
+            background: #eff6ff;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 100;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease-out forwards;
+            transition: opacity 0.3s;
+        }
+        .toast-success { background: #059669; }
+        .toast-error { background: #dc2626; }
+
+        /* Print styles */
+        @media print {
+            body * { visibility: hidden; }
+            #hidden-capture-container, #hidden-capture-container * { visibility: visible; }
+            #hidden-capture-container { position: absolute; top: 0; left: 0; }
         }
     </style>
 </head>
@@ -92,7 +158,11 @@
                         <span class="font-semibold text-xl tracking-tight text-white">Sellder</span>
                     </div>
                     
-                    <div class="flex items-center gap-2 sm:gap-6">
+                    <div class="hidden sm:flex items-center gap-2 sm:gap-6">
+                        <button id="nav-clients" class="text-sm font-medium transition-colors flex items-center gap-2 h-16 border-b-2 px-1 border-transparent text-blue-200 hover:text-white">
+                            <i data-lucide="users" class="w-4 h-4"></i>
+                            <span>Clientes</span>
+                        </button>
                         <button id="nav-products" class="text-sm font-medium transition-colors flex items-center gap-2 h-16 border-b-2 px-1 border-transparent text-blue-200 hover:text-white">
                             <i data-lucide="package" class="w-4 h-4"></i>
                             <span>Productos</span>
@@ -109,14 +179,135 @@
                             <span>Salir</span>
                         </button>
                     </div>
+
+                    <!-- Mobile menu button -->
+                    <div class="flex sm:hidden items-center">
+                        <button id="mobile-menu-btn" class="text-white p-2 focus:outline-none hover:bg-blue-800 rounded-md transition-colors">
+                            <i data-lucide="menu" class="w-6 h-6"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </nav>
 
+        <!-- Mobile Sidebar Overlay -->
+        <div id="mobile-sidebar-overlay" class="fixed inset-0 bg-slate-900/50 z-40 hidden transition-opacity opacity-0"></div>
+        
+        <!-- Mobile Sidebar -->
+        <div id="mobile-sidebar" class="fixed inset-y-0 right-0 w-64 bg-white shadow-xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-blue-900 text-white">
+                <span class="font-semibold text-lg">Menú</span>
+                <button id="close-sidebar-btn" class="p-1 hover:text-blue-200 focus:outline-none">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="flex-1 py-4 px-2 space-y-2 overflow-y-auto">
+                <button id="sidebar-clients" class="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-100 rounded-md transition-colors sidebar-link">
+                    <i data-lucide="users" class="w-5 h-5 text-blue-700"></i>
+                    <span class="font-medium">Clientes</span>
+                </button>
+                <button id="sidebar-products" class="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-100 rounded-md transition-colors sidebar-link">
+                    <i data-lucide="package" class="w-5 h-5 text-blue-700"></i>
+                    <span class="font-medium">Productos</span>
+                </button>
+                <button id="sidebar-quotes" class="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-100 rounded-md transition-colors sidebar-link">
+                    <i data-lucide="calculator" class="w-5 h-5 text-blue-700"></i>
+                    <span class="font-medium">Cotizar</span>
+                </button>
+            </div>
+            <div class="p-4 border-t border-slate-100">
+                <button id="sidebar-logout" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md font-medium transition-colors shadow-sm">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </div>
+
         <!-- Contenedor Principal -->
         <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in">
             
-            <!-- VISTA: PRODUCTOS -->
+            <!-- ==================== VISTA: CLIENTES ==================== -->
+            <div id="clients-view" class="hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight text-white">Clientes</h2>
+                        <p class="text-sm text-slate-300">Gestione la cartera de clientes.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Formulario Crear Cliente -->
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-6 h-fit md:col-span-1">
+                        <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                            <i data-lucide="user-plus" class="w-4 h-4 text-blue-700"></i>
+                            Nuevo Cliente
+                        </h3>
+                        <form id="add-client-form" class="space-y-3">
+                            <div class="space-y-1">
+                                <label class="text-sm font-medium text-slate-700">Razón Social / Nombre <span class="text-red-400">*</span></label>
+                                <input type="text" id="client-name" required placeholder="Ej: Juan Pérez Ltda." class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-sm font-medium text-slate-700">RUT</label>
+                                <input type="text" id="client-rut" placeholder="Ej: 12.345.678-9" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-sm font-medium text-slate-700">Dirección</label>
+                                <input type="text" id="client-address" placeholder="Ej: Av. Libertador 123" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-sm font-medium text-slate-700">Teléfono</label>
+                                    <input type="tel" id="client-phone" placeholder="+56 9 1234 5678" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-sm font-medium text-slate-700">Comuna</label>
+                                    <input type="text" id="client-comuna" placeholder="Ej: Santiago" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-sm font-medium text-slate-700">Correo Electrónico</label>
+                                <input type="email" id="client-email" placeholder="correo@ejemplo.com" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-sm font-medium text-slate-700">Proyecto</label>
+                                <input type="text" id="client-project" placeholder="Ej: Remodelación cocina" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <button type="submit" class="w-full inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2 mt-2">
+                                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                                Guardar Cliente
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Tabla Clientes -->
+                    <div class="rounded-xl border border-slate-200 bg-white shadow-sm md:col-span-2 overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50">
+                            <div class="relative">
+                                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" id="client-search" placeholder="Buscar cliente por nombre, RUT, proyecto..." class="flex h-9 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 bg-slate-50 border-b border-slate-200 uppercase">
+                                    <tr>
+                                        <th class="px-4 py-3 font-medium">Razón Social</th>
+                                        <th class="px-4 py-3 font-medium">RUT</th>
+                                        <th class="px-4 py-3 font-medium">Teléfono</th>
+                                        <th class="px-4 py-3 font-medium">Proyecto</th>
+                                        <th class="px-4 py-3 font-medium text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clients-table-body" class="divide-y divide-slate-200">
+                                    <!-- Renderizado por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== VISTA: PRODUCTOS ==================== -->
             <div id="products-view" class="hidden space-y-6">
                 <div class="flex items-center justify-between">
                     <h2 class="text-2xl font-bold tracking-tight text-white">Productos</h2>
@@ -163,7 +354,7 @@
                 </div>
             </div>
 
-            <!-- VISTA: COTIZACIONES -->
+            <!-- ==================== VISTA: COTIZACIONES ==================== -->
             <div id="quotes-view" class="space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -177,26 +368,88 @@
                 </div>
 
                 <!-- Pestaña Nueva Cotización -->
-                <div id="new-quote-container" class="rounded-xl border border-slate-200 bg-white shadow-sm p-8 max-w-4xl mx-auto">
-                    <!-- Indicador de pasos -->
-                    <div id="step-indicators" class="flex items-center justify-between mb-8 w-full max-w-3xl mx-auto overflow-x-auto text-xs px-2 sm:px-0">
+                <div id="new-quote-container" class="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto">
+                    <!-- Tarjeta Resumen (Derecha en Desktop, Abajo en Mobile) -->
+                    <div class="lg:w-1/3 order-2 lg:order-2">
+                        <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-6 sticky top-24">
+                            <h3 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                                <i data-lucide="calculator" class="w-5 h-5 text-blue-700"></i>
+                                Resumen en Vivo
+                            </h3>
+                            <div id="live-summary-content" class="space-y-4">
+                                <div class="text-center py-6 text-slate-400">
+                                    <p class="text-sm">Complete los datos de la cotización para ver el total.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta Wizard (Izquierda en Desktop, Arriba en Mobile) -->
+                    <div class="lg:w-2/3 order-1 lg:order-1 rounded-xl border border-slate-200 bg-white shadow-sm p-8">
+                        <!-- Indicador de pasos -->
+                        <div id="step-indicators" class="flex items-center justify-between mb-8 w-full max-w-3xl mx-auto overflow-x-auto text-xs px-2 sm:px-0">
                         <!-- Renderizado por JS -->
                     </div>
 
-                    <!-- PASO 1 -->
+                    <!-- PASO 1: Cliente -->
                     <div id="step-1" class="step-content space-y-6 max-w-md mx-auto hidden">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-semibold text-slate-900">Datos del Cliente</h3>
-                            <p class="text-sm text-slate-500">Ingrese la información básica para la cotización.</p>
+                            <p class="text-sm text-slate-500">Busque un cliente existente o ingrese datos manualmente.</p>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-sm font-medium text-slate-700">Nombre Completo / Empresa</label>
-                            <input type="text" id="quote-customer" placeholder="Ej: Juan Pérez" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+
+                        <!-- Buscador de clientes -->
+                        <div class="space-y-2 relative">
+                            <label class="text-sm font-medium text-slate-700">Buscar Cliente Guardado</label>
+                            <div class="relative">
+                                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                <input type="text" id="quote-client-search" placeholder="Escriba para buscar por nombre, RUT..." class="flex h-9 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700" autocomplete="off">
+                                <div id="client-autocomplete" class="autocomplete-dropdown hidden"></div>
+                            </div>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-sm font-medium text-slate-700">Teléfono</label>
-                            <input type="tel" id="quote-phone" placeholder="Ej: +56 9 1234 5678" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+
+                        <!-- Botón crear cliente rápido -->
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 h-px bg-slate-200"></div>
+                            <button type="button" onclick="openQuickClientModal()" class="inline-flex items-center gap-2 text-sm text-blue-700 hover:text-blue-800 font-medium transition-colors">
+                                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                                Crear cliente nuevo
+                            </button>
+                            <div class="flex-1 h-px bg-slate-200"></div>
                         </div>
+
+                        <!-- Campos del cliente (se auto-rellenan o se llenan manualmente) -->
+                        <div id="selected-client-badge" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-blue-900" id="badge-client-name"></p>
+                                <p class="text-xs text-blue-600" id="badge-client-detail"></p>
+                            </div>
+                            <button type="button" onclick="clearSelectedClient()" class="text-blue-400 hover:text-blue-600 p-1">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <div id="manual-client-fields">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium text-slate-700">Razón Social / Nombre <span class="text-red-400">*</span></label>
+                                <input type="text" id="quote-customer" oninput="state.customer = this.value; updateLiveSummary()" placeholder="Ej: Juan Pérez" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 mt-3">
+                                <div class="space-y-2">
+                                    <label class="text-sm font-medium text-slate-700">Teléfono</label>
+                                    <input type="tel" id="quote-phone" oninput="state.phone = this.value; updateLiveSummary()" placeholder="+56 9 1234 5678" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-sm font-medium text-slate-700">Correo</label>
+                                    <input type="email" id="quote-email" oninput="state.email = this.value; updateLiveSummary()" placeholder="correo@ejemplo.com" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                </div>
+                            </div>
+                            <div class="space-y-2 mt-3">
+                                <label class="text-sm font-medium text-slate-700">Dirección</label>
+                                <input type="text" id="quote-address" oninput="state.address = this.value; updateLiveSummary()" placeholder="Ej: Av. Libertador 123, Santiago" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                            </div>
+                        </div>
+
                         <div class="flex justify-end pt-4">
                             <button onclick="changeStep(2)" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
                                 Siguiente <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
@@ -204,15 +457,17 @@
                         </div>
                     </div>
 
-                    <!-- PASO 2 -->
+                    <!-- PASO 2: Productos -->
                     <div id="step-2" class="step-content space-y-6 hidden">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-semibold text-slate-900">Selección de Productos</h3>
-                            <p class="text-sm text-slate-500">Añada los productos a cotizar.</p>
+                            <p class="text-sm text-slate-500">Añada productos del catálogo o agregue líneas libres.</p>
                         </div>
+
+                        <!-- Agregar desde catálogo -->
                         <div class="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-200">
                             <div class="flex-1 w-full space-y-2">
-                                <label class="text-sm font-medium text-slate-700">Producto</label>
+                                <label class="text-sm font-medium text-slate-700">Producto del catálogo</label>
                                 <select id="quote-product-select" class="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
                                     <option value="">-- Seleccionar --</option>
                                     <!-- Renderizado JS -->
@@ -227,14 +482,24 @@
                             </button>
                         </div>
 
+                        <!-- Agregar línea libre -->
+                        <div class="flex justify-center">
+                            <button onclick="addFreeLineItem()" class="inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md px-4 py-2 transition-colors">
+                                <i data-lucide="pencil-line" class="w-4 h-4"></i>
+                                + Línea libre (sin SKU)
+                            </button>
+                        </div>
+
+                        <!-- Tabla de items -->
                         <div id="quote-items-container" class="border border-slate-200 rounded-lg overflow-hidden hidden">
                             <table class="w-full text-sm text-left">
                                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
                                     <tr>
-                                        <th class="px-4 py-2 font-medium">Producto</th>
-                                        <th class="px-4 py-2 font-medium text-center">Cant.</th>
-                                        <th class="px-4 py-2 font-medium text-right">Subtotal</th>
-                                        <th class="px-4 py-2 font-medium text-center">Acción</th>
+                                        <th class="px-4 py-2 font-medium" style="min-width:200px">Descripción</th>
+                                        <th class="px-4 py-2 font-medium text-center" style="width:80px">Cant.</th>
+                                        <th class="px-4 py-2 font-medium text-right" style="width:130px">Precio Unit.</th>
+                                        <th class="px-4 py-2 font-medium text-right" style="width:130px">Subtotal</th>
+                                        <th class="px-4 py-2 font-medium text-center" style="width:60px">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="quote-items-body" class="divide-y divide-slate-100">
@@ -245,6 +510,7 @@
                         <div id="quote-items-empty" class="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-lg">
                             <i data-lucide="shopping-cart" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
                             <p class="text-sm">No hay productos en la cotización.</p>
+                            <p class="text-xs mt-1 text-slate-300">Añada desde el catálogo o use una línea libre.</p>
                         </div>
 
                         <div class="flex justify-between pt-4 border-t border-slate-100">
@@ -257,7 +523,7 @@
                         </div>
                     </div>
 
-                    <!-- PASO 3 -->
+                    <!-- PASO 3: Armado/Instalación -->
                     <div id="step-3" class="step-content space-y-6 max-w-md mx-auto hidden">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-semibold text-slate-900">Servicio de Instalación</h3>
@@ -266,11 +532,11 @@
                         <div class="space-y-4">
                             <div class="space-y-2">
                                 <label class="text-sm font-medium text-slate-700">Detalle del Servicio</label>
-                                <input type="text" id="quote-install-name" value="Servicio de Armado en Casa" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                <input type="text" id="quote-install-name" oninput="updateLiveSummary()" value="Servicio de Armado en Casa" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
                             </div>
                             <div class="space-y-2">
                                 <label class="text-sm font-medium text-slate-700">Costo (CLP) - Dejar en blanco si no aplica</label>
-                                <input type="number" id="quote-install-price" placeholder="Ej: 25000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                <input type="number" id="quote-install-price" oninput="updateLiveSummary()" placeholder="Ej: 25000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
                             </div>
                         </div>
                         <div class="flex justify-between pt-4 border-t border-slate-100">
@@ -283,7 +549,7 @@
                         </div>
                     </div>
 
-                    <!-- PASO 4 -->
+                    <!-- PASO 4: Despacho -->
                     <div id="step-4" class="step-content space-y-6 max-w-md mx-auto hidden">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-semibold text-slate-900">Despacho</h3>
@@ -292,11 +558,11 @@
                         <div class="space-y-4">
                             <div class="space-y-2">
                                 <label class="text-sm font-medium text-slate-700">Destino o Detalle</label>
-                                <input type="text" id="quote-ship-name" value="Despacho a Domicilio" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                <input type="text" id="quote-ship-name" oninput="updateLiveSummary()" value="Despacho a Domicilio" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
                             </div>
                             <div class="space-y-2">
                                 <label class="text-sm font-medium text-slate-700">Costo de Envío (CLP) - Dejar en blanco si no aplica</label>
-                                <input type="number" id="quote-ship-price" placeholder="Ej: 15000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
+                                <input type="number" id="quote-ship-price" oninput="updateLiveSummary()" placeholder="Ej: 15000" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
                             </div>
                         </div>
                         <div class="flex justify-between pt-4 border-t border-slate-100">
@@ -309,7 +575,7 @@
                         </div>
                     </div>
 
-                    <!-- PASO 5 -->
+                    <!-- PASO 5: Resumen -->
                     <div id="step-5" class="step-content space-y-6 hidden">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-semibold text-slate-900">Resumen de Cotización</h3>
@@ -317,7 +583,7 @@
                         </div>
 
                         <div id="quote-summary-render">
-                            <!-- Renderizado JS (La misma card de la imagen) -->
+                            <!-- Renderizado JS -->
                         </div>
 
                         <div class="flex justify-between pt-4 max-w-md mx-auto w-full">
@@ -329,6 +595,7 @@
                             </button>
                         </div>
                     </div>
+                </div>
                 </div>
 
                 <!-- Pestaña Historial -->
@@ -345,18 +612,26 @@
         </main>
     </div>
 
-    <!-- ==================== MODAL DE DETALLES ==================== -->
+    <!-- ==================== MODAL DETALLE COTIZACIÓN ==================== -->
     <div id="quote-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm transition-all hidden">
         <div class="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative animate-in zoom-in">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1 transition-colors">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
             <div class="p-6">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-2">
                     <h3 class="font-semibold text-slate-900 text-lg">Detalle de Cotización</h3>
-                    <button id="modal-download-btn" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-8 px-3">
-                        <i data-lucide="download" class="w-4 h-4 mr-2"></i> Descargar Imagen
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="modal-pdf-btn" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-8 px-3">
+                            <i data-lucide="file-down" class="w-4 h-4 mr-2"></i> PDF
+                        </button>
+                        <button id="modal-whatsapp-btn" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-green-100 text-green-800 shadow-sm hover:bg-green-200 h-8 px-3">
+                            <i data-lucide="message-circle" class="w-4 h-4 mr-2"></i> WhatsApp
+                        </button>
+                        <button id="modal-email-btn" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-100 text-blue-800 shadow-sm hover:bg-blue-200 h-8 px-3">
+                            <i data-lucide="mail" class="w-4 h-4 mr-2"></i> Correo
+                        </button>
+                    </div>
                 </div>
                 <div id="modal-content">
                     <!-- Renderizado JS -->
@@ -365,7 +640,59 @@
         </div>
     </div>
 
-    <!-- Contenedor oculto para html2canvas -->
+    <!-- ==================== MODAL CREAR CLIENTE RÁPIDO ==================== -->
+    <div id="quick-client-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm transition-all hidden">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto relative animate-in zoom-in">
+            <button onclick="closeQuickClientModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1 transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="p-6">
+                <h3 class="font-semibold text-slate-900 text-lg mb-1 flex items-center gap-2">
+                    <i data-lucide="user-plus" class="w-5 h-5 text-blue-700"></i>
+                    Crear Cliente Rápido
+                </h3>
+                <p class="text-sm text-slate-500 mb-5">Complete los datos y el cliente quedará seleccionado para esta cotización.</p>
+                <form id="quick-client-form" class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">Razón Social / Nombre <span class="text-red-400">*</span></label>
+                        <input type="text" id="qc-name" required placeholder="Ej: Juan Pérez Ltda." class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">RUT</label>
+                        <input type="text" id="qc-rut" placeholder="Ej: 12.345.678-9" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">Dirección</label>
+                        <input type="text" id="qc-address" placeholder="Ej: Av. Libertador 123" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-700">Teléfono</label>
+                            <input type="tel" id="qc-phone" placeholder="+56 9 1234 5678" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-700">Comuna</label>
+                            <input type="text" id="qc-comuna" placeholder="Ej: Santiago" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">Correo Electrónico</label>
+                        <input type="email" id="qc-email" placeholder="correo@ejemplo.com" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">Proyecto</label>
+                        <input type="text" id="qc-project" placeholder="Ej: Remodelación cocina" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2 mt-2">
+                        <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                        Guardar y Seleccionar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor oculto para PDF/captura -->
     <div id="hidden-capture-container" class="fixed top-0 left-0 w-[500px] z-[-10] opacity-0 pointer-events-none"></div>
 
     <script>
@@ -383,20 +710,24 @@
             isLoggedIn: JSON.parse(localStorage.getItem('sellder_auth')) || false,
             products: JSON.parse(localStorage.getItem('sellder_products')) || defaultProducts,
             quotes: JSON.parse(localStorage.getItem('sellder_quotes')) || [],
-            currentView: 'quotes', // 'products', 'quotes'
-            activeTab: 'new', // 'new', 'history'
+            clients: JSON.parse(localStorage.getItem('sellder_clients')) || [],
+            currentView: 'quotes',
+            activeTab: 'new',
             
-            // Estado del Wizard
+            // Wizard state
             step: 1,
+            selectedClientId: null,
             customer: '',
             phone: '',
+            email: '',
+            address: '',
             currentItems: [],
             installName: 'Servicio de Armado en Casa',
             installPrice: '',
             shippingName: 'Despacho a Domicilio',
             shippingPrice: '',
             
-            // Modal state
+            // Modal
             selectedQuoteId: null
         };
 
@@ -404,6 +735,18 @@
             localStorage.setItem('sellder_auth', JSON.stringify(state.isLoggedIn));
             localStorage.setItem('sellder_products', JSON.stringify(state.products));
             localStorage.setItem('sellder_quotes', JSON.stringify(state.quotes));
+            localStorage.setItem('sellder_clients', JSON.stringify(state.clients));
+        };
+
+        // ==================== TOAST NOTIFICATIONS ====================
+        const showToast = (message, type = 'success') => {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
         };
 
         // ==================== INICIALIZACIÓN ====================
@@ -429,29 +772,55 @@
         };
 
         const renderApp = () => {
-            // Manejar Vistas (Productos vs Cotizaciones)
-            const btnProducts = document.getElementById('nav-products');
-            const btnQuotes = document.getElementById('nav-quotes');
-            const viewProducts = document.getElementById('products-view');
-            const viewQuotes = document.getElementById('quotes-view');
+            const navButtons = {
+                clients: document.getElementById('nav-clients'),
+                products: document.getElementById('nav-products'),
+                quotes: document.getElementById('nav-quotes')
+            };
+            const views = {
+                clients: document.getElementById('clients-view'),
+                products: document.getElementById('products-view'),
+                quotes: document.getElementById('quotes-view')
+            };
 
-            if (state.currentView === 'products') {
-                viewProducts.classList.remove('hidden');
-                viewQuotes.classList.add('hidden');
-                btnProducts.classList.replace('border-transparent', 'border-white');
-                btnProducts.classList.replace('text-blue-200', 'text-white');
-                btnQuotes.classList.replace('border-white', 'border-transparent');
-                btnQuotes.classList.replace('text-white', 'text-blue-200');
-                renderProductsTable();
-            } else {
-                viewProducts.classList.add('hidden');
-                viewQuotes.classList.remove('hidden');
-                btnQuotes.classList.replace('border-transparent', 'border-white');
-                btnQuotes.classList.replace('text-blue-200', 'text-white');
-                btnProducts.classList.replace('border-white', 'border-transparent');
-                btnProducts.classList.replace('text-white', 'text-blue-200');
-                renderQuotesTabs();
+            // Reset all nav buttons
+            Object.values(navButtons).forEach(btn => {
+                btn.classList.replace('border-white', 'border-transparent');
+                btn.classList.replace('text-white', 'text-blue-200');
+            });
+            
+            // Reset sidebar buttons styling
+            ['clients', 'products', 'quotes'].forEach(key => {
+                const sidebarBtn = document.getElementById(`sidebar-${key}`);
+                if(sidebarBtn) {
+                    sidebarBtn.classList.remove('bg-blue-50', 'text-blue-700', 'font-semibold');
+                    sidebarBtn.classList.add('text-slate-700');
+                }
+            });
+
+            // Hide all views
+            Object.values(views).forEach(v => v.classList.add('hidden'));
+
+            // Activate current view
+            const activeNav = navButtons[state.currentView];
+            const activeSidebar = document.getElementById(`sidebar-${state.currentView}`);
+            const activeView = views[state.currentView];
+            
+            if (activeNav) {
+                activeNav.classList.replace('border-transparent', 'border-white');
+                activeNav.classList.replace('text-blue-200', 'text-white');
             }
+            if (activeSidebar) {
+                activeSidebar.classList.remove('text-slate-700');
+                activeSidebar.classList.add('bg-blue-50', 'text-blue-700', 'font-semibold');
+            }
+            if (activeView) activeView.classList.remove('hidden');
+
+            // Render specific view content
+            if (state.currentView === 'products') renderProductsTable();
+            else if (state.currentView === 'clients') renderClientsTable();
+            else renderQuotesTabs();
+
             lucide.createIcons();
         };
 
@@ -464,20 +833,85 @@
             if (state.activeTab === 'new') {
                 contNew.classList.remove('hidden');
                 contHistory.classList.add('hidden');
-                
                 btnNew.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
                 btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
-                
                 renderWizard();
             } else {
                 contNew.classList.add('hidden');
                 contHistory.classList.remove('hidden');
-                
                 btnHistory.className = "px-4 py-1.5 text-sm font-medium rounded bg-white text-blue-700 shadow-sm";
                 btnNew.className = "px-4 py-1.5 text-sm font-medium rounded text-slate-600 hover:text-slate-900";
-                
                 renderHistory();
             }
+        };
+
+        // ==================== LÓGICA DE CLIENTES ====================
+        const renderClientsTable = (filter = '') => {
+            const tbody = document.getElementById('clients-table-body');
+            const searchTerm = filter || (document.getElementById('client-search')?.value || '').toLowerCase();
+            
+            let filtered = state.clients;
+            if (searchTerm) {
+                filtered = state.clients.filter(c =>
+                    (c.name || '').toLowerCase().includes(searchTerm) ||
+                    (c.rut || '').toLowerCase().includes(searchTerm) ||
+                    (c.project || '').toLowerCase().includes(searchTerm) ||
+                    (c.phone || '').toLowerCase().includes(searchTerm)
+                );
+            }
+
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">
+                    ${state.clients.length === 0 ? 'No hay clientes registrados.' : 'No se encontraron resultados.'}
+                </td></tr>`;
+                return;
+            }
+
+            filtered.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-4 py-3">
+                        <span class="font-medium text-slate-900">${c.name}</span>
+                        ${c.comuna ? `<span class="text-xs text-slate-400 ml-1">(${c.comuna})</span>` : ''}
+                    </td>
+                    <td class="px-4 py-3 text-slate-500 text-sm">${c.rut || '—'}</td>
+                    <td class="px-4 py-3 text-slate-500 text-sm">${c.phone || '—'}</td>
+                    <td class="px-4 py-3">
+                        ${c.project ? `<span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">${c.project}</span>` : '<span class="text-slate-300 text-sm">—</span>'}
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="deleteClient('${c.id}')" class="text-slate-400 hover:text-red-600 p-1 transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        };
+
+        const addClient = (data) => {
+            const newClient = {
+                id: Date.now().toString(),
+                name: data.name,
+                rut: data.rut || '',
+                address: data.address || '',
+                phone: data.phone || '',
+                comuna: data.comuna || '',
+                email: data.email || '',
+                project: data.project || ''
+            };
+            state.clients.push(newClient);
+            saveState();
+            return newClient;
+        };
+
+        const deleteClient = (id) => {
+            state.clients = state.clients.filter(c => c.id !== id);
+            saveState();
+            renderClientsTable();
         };
 
         // ==================== LÓGICA DE PRODUCTOS ====================
@@ -486,7 +920,7 @@
             tbody.innerHTML = '';
             
             if (state.products.length === 0) {
-                tbody.innerHTML = `<tr><td colSpan="4" class="px-6 py-4 text-center text-slate-500">No hay productos registrados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-4 text-center text-slate-500">No hay productos registrados.</td></tr>`;
                 return;
             }
 
@@ -516,7 +950,7 @@
             renderProductsTable();
         };
 
-        // ==================== LÓGICA DEL WIZARD (NUEVA COTIZACIÓN) ====================
+        // ==================== WIZARD (NUEVA COTIZACIÓN) ====================
         const renderWizard = () => {
             // Render Step Indicators
             const indicatorCont = document.getElementById('step-indicators');
@@ -538,13 +972,17 @@
             });
             indicatorCont.innerHTML = indHtml;
 
-            // Mostrar solo el contenido del paso actual
+            // Mostrar solo el paso actual
             document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
             document.getElementById(`step-${state.step}`).classList.remove('hidden');
 
-            // Actualizaciones específicas por paso
+            // Paso 1: actualizar estado visual del cliente seleccionado
+            if (state.step === 1) {
+                updateClientSelectionUI();
+            }
+
+            // Paso 2: llenar select de productos
             if (state.step === 2) {
-                // Llenar select de productos
                 const select = document.getElementById('quote-product-select');
                 select.innerHTML = '<option value="">-- Seleccionar --</option>';
                 state.products.forEach(p => {
@@ -559,12 +997,120 @@
             lucide.createIcons();
         };
 
+        // ==================== CLIENTE EN WIZARD ====================
+        const updateClientSelectionUI = () => {
+            const badge = document.getElementById('selected-client-badge');
+            const manualFields = document.getElementById('manual-client-fields');
+            
+            if (state.selectedClientId) {
+                const client = state.clients.find(c => c.id === state.selectedClientId);
+                if (client) {
+                    badge.classList.remove('hidden');
+                    document.getElementById('badge-client-name').textContent = client.name;
+                    document.getElementById('badge-client-detail').textContent = 
+                        [client.rut, client.phone, client.project].filter(Boolean).join(' · ');
+                    
+                    // Auto-rellenar campos ocultos
+                    document.getElementById('quote-customer').value = client.name;
+                    document.getElementById('quote-phone').value = client.phone || '';
+                    document.getElementById('quote-email').value = client.email || '';
+                    document.getElementById('quote-address').value = client.address || '';
+                    manualFields.classList.add('hidden');
+                    return;
+                }
+            }
+            
+            badge.classList.add('hidden');
+            manualFields.classList.remove('hidden');
+        };
+
+        const selectClientForQuote = (clientId) => {
+            state.selectedClientId = clientId;
+            const client = state.clients.find(c => c.id === clientId);
+            if (client) {
+                state.customer = client.name;
+                state.phone = client.phone || '';
+                state.email = client.email || '';
+                state.address = client.address || '';
+            }
+            document.getElementById('quote-client-search').value = '';
+            document.getElementById('client-autocomplete').classList.add('hidden');
+            updateClientSelectionUI();
+            updateLiveSummary();
+        };
+
+        const clearSelectedClient = () => {
+            state.selectedClientId = null;
+            state.customer = '';
+            state.phone = '';
+            state.email = '';
+            state.address = '';
+            document.getElementById('quote-customer').value = '';
+            document.getElementById('quote-phone').value = '';
+            document.getElementById('quote-email').value = '';
+            document.getElementById('quote-address').value = '';
+            updateClientSelectionUI();
+            updateLiveSummary();
+            lucide.createIcons();
+        };
+
+        // Autocomplete para buscar clientes
+        const handleClientSearch = (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const dropdown = document.getElementById('client-autocomplete');
+            
+            if (!query || query.length < 1) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            const matches = state.clients.filter(c =>
+                (c.name || '').toLowerCase().includes(query) ||
+                (c.rut || '').toLowerCase().includes(query) ||
+                (c.project || '').toLowerCase().includes(query)
+            ).slice(0, 6);
+
+            if (matches.length === 0) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = matches.map(c => `
+                <div class="autocomplete-item" onclick="selectClientForQuote('${c.id}')">
+                    <div class="font-medium text-slate-900">${c.name}</div>
+                    <div class="sub">${[c.rut, c.phone, c.project].filter(Boolean).join(' · ') || 'Sin detalles'}</div>
+                </div>
+            `).join('');
+            dropdown.classList.remove('hidden');
+        };
+
+        // Modal crear cliente rápido
+        const openQuickClientModal = () => {
+            document.getElementById('quick-client-modal').classList.remove('hidden');
+            lucide.createIcons();
+            document.getElementById('qc-name').focus();
+        };
+
+        const closeQuickClientModal = () => {
+            document.getElementById('quick-client-modal').classList.add('hidden');
+        };
+
+        // ==================== ITEMS DE LA COTIZACIÓN ====================
         const changeStep = (newStep) => {
-            // Guardar datos temporales antes de cambiar
+            // Guardar datos antes de cambiar
             if (state.step === 1) {
                 state.customer = document.getElementById('quote-customer').value;
                 state.phone = document.getElementById('quote-phone').value;
-                if (!state.customer.trim()) return; // Validación básica
+                state.email = document.getElementById('quote-email').value;
+                state.address = document.getElementById('quote-address').value;
+                if (!state.customer.trim()) {
+                    showToast('Ingrese el nombre del cliente', 'error');
+                    return;
+                }
+            }
+            if (state.step === 2) {
+                // Sincronizar valores editables antes de salir
+                syncEditableItems();
             }
             if (state.step === 3) {
                 state.installName = document.getElementById('quote-install-name').value;
@@ -581,24 +1127,56 @@
 
         const goToSummary = () => {
             changeStep(5);
-            // Renderizar resumen
             document.getElementById('quote-summary-render').innerHTML = generateSummaryHTML(getCurrentQuoteObj());
         };
 
         const getCurrentQuoteObj = () => {
-            let total = state.currentItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const installPriceInt = parseInt(state.installPrice) || 0;
-            const shipPriceInt = parseInt(state.shippingPrice) || 0;
+            const installName = document.getElementById('quote-install-name')?.value || state.installName;
+            const installPriceRaw = document.getElementById('quote-install-price')?.value;
+            const installPriceInt = installPriceRaw !== '' && installPriceRaw !== undefined ? parseInt(installPriceRaw) || 0 : parseInt(state.installPrice) || 0;
+            
+            const shipName = document.getElementById('quote-ship-name')?.value || state.shippingName;
+            const shipPriceRaw = document.getElementById('quote-ship-price')?.value;
+            const shipPriceInt = shipPriceRaw !== '' && shipPriceRaw !== undefined ? parseInt(shipPriceRaw) || 0 : parseInt(state.shippingPrice) || 0;
+
+            let total = state.currentItems.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
             total += installPriceInt + shipPriceInt;
 
             return {
                 customer: state.customer,
                 phone: state.phone,
+                email: state.email || '',
+                address: state.address || '',
                 items: state.currentItems,
                 total: total,
-                install: state.installName ? { name: state.installName, price: installPriceInt } : null,
-                shipping: state.shippingName ? { name: state.shippingName, price: shipPriceInt } : null
+                install: installName ? { name: installName, price: installPriceInt } : null,
+                shipping: shipName ? { name: shipName, price: shipPriceInt } : null
             };
+        };
+
+        const updateLiveSummary = () => {
+            const container = document.getElementById('live-summary-content');
+            if (!container) return;
+            const obj = getCurrentQuoteObj();
+            if (!obj.customer && obj.items.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400">
+                    <p class="text-sm">Complete los datos de la cotización para ver el total.</p>
+                </div>`;
+            } else {
+                container.innerHTML = generateSummaryHTML(obj);
+                lucide.createIcons();
+            }
+        };
+
+        const syncEditableItems = () => {
+            state.currentItems.forEach((item, idx) => {
+                const nameEl = document.getElementById(`item-name-${idx}`);
+                const priceEl = document.getElementById(`item-price-${idx}`);
+                const qtyEl = document.getElementById(`item-qty-${idx}`);
+                if (nameEl) item.name = nameEl.value || item.name;
+                if (priceEl) item.price = parseInt(priceEl.value) || 0;
+                if (qtyEl) item.quantity = parseInt(qtyEl.value) || 1;
+            });
         };
 
         const renderQuoteItems = () => {
@@ -619,15 +1197,32 @@
             btnNext.disabled = false;
             tbody.innerHTML = '';
 
-            state.currentItems.forEach(item => {
+            state.currentItems.forEach((item, idx) => {
+                const subtotal = (item.price || 0) * (item.quantity || 1);
+                const isFreeLine = item.isFreeLine;
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50";
+                tr.className = "hover:bg-slate-50 transition-colors";
                 tr.innerHTML = `
-                    <td class="px-4 py-3 font-medium text-slate-900">${item.name}</td>
-                    <td class="px-4 py-3 text-center text-slate-600">${item.quantity}</td>
-                    <td class="px-4 py-3 text-right text-slate-900">${formatCLP(item.price * item.quantity)}</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="removeQuoteItem('${item.productId}')" class="text-slate-400 hover:text-red-600 p-1">
+                    <td class="px-4 py-2">
+                        <input type="text" id="item-name-${idx}" value="${item.name}" 
+                            class="editable-cell w-full text-sm font-medium text-slate-900 ${isFreeLine ? 'bg-amber-50 border-amber-200' : ''}"
+                            onchange="updateItemField(${idx}, 'name', this.value)"
+                            placeholder="Descripción del producto...">
+                    </td>
+                    <td class="px-4 py-2 text-center">
+                        <input type="number" id="item-qty-${idx}" value="${item.quantity}" min="1"
+                            class="editable-cell w-16 text-sm text-slate-600 text-center"
+                            onchange="updateItemField(${idx}, 'quantity', parseInt(this.value) || 1)">
+                    </td>
+                    <td class="px-4 py-2 text-right">
+                        <input type="number" id="item-price-${idx}" value="${item.price || ''}" 
+                            class="editable-cell w-24 text-sm text-slate-900 text-right ${isFreeLine && !item.price ? 'border-amber-300 bg-amber-50' : ''}"
+                            onchange="updateItemField(${idx}, 'price', parseInt(this.value) || 0)"
+                            placeholder="Precio...">
+                    </td>
+                    <td class="px-4 py-2 text-right text-sm font-medium text-slate-900">${formatCLP(subtotal)}</td>
+                    <td class="px-4 py-2 text-center">
+                        <button onclick="removeQuoteItem(${idx})" class="text-slate-400 hover:text-red-600 p-1 transition-colors">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     </td>
@@ -635,6 +1230,15 @@
                 tbody.appendChild(tr);
             });
             lucide.createIcons();
+        };
+
+        const updateItemField = (idx, field, value) => {
+            if (state.currentItems[idx]) {
+                state.currentItems[idx][field] = value;
+                // Re-render subtotals
+                renderQuoteItems();
+                updateLiveSummary();
+            }
         };
 
         const addQuoteItem = () => {
@@ -648,7 +1252,7 @@
             const product = state.products.find(p => p.id === prodId);
             if (!product) return;
 
-            const existing = state.currentItems.find(i => i.productId === prodId);
+            const existing = state.currentItems.find(i => i.productId === prodId && !i.isFreeLine);
             if (existing) {
                 existing.quantity += qty;
             } else {
@@ -656,18 +1260,38 @@
                     productId: product.id,
                     name: product.name,
                     price: product.price,
-                    quantity: qty
+                    quantity: qty,
+                    isFreeLine: false
                 });
             }
             
             select.value = '';
             qtyInput.value = 1;
             renderQuoteItems();
+            updateLiveSummary();
         };
 
-        const removeQuoteItem = (productId) => {
-            state.currentItems = state.currentItems.filter(i => i.productId !== productId);
+        const addFreeLineItem = () => {
+            state.currentItems.push({
+                productId: 'free_' + Date.now(),
+                name: '',
+                price: 0,
+                quantity: 1,
+                isFreeLine: true
+            });
             renderQuoteItems();
+            updateLiveSummary();
+            // Focus on the new name field
+            setTimeout(() => {
+                const nameInput = document.getElementById(`item-name-${state.currentItems.length - 1}`);
+                if (nameInput) nameInput.focus();
+            }, 50);
+        };
+
+        const removeQuoteItem = (idx) => {
+            state.currentItems.splice(idx, 1);
+            renderQuoteItems();
+            updateLiveSummary();
         };
 
         const saveQuote = () => {
@@ -681,8 +1305,11 @@
             saveState();
 
             // Reset
+            state.selectedClientId = null;
             state.customer = '';
             state.phone = '';
+            state.email = '';
+            state.address = '';
             state.currentItems = [];
             state.installName = 'Servicio de Armado en Casa';
             state.installPrice = '';
@@ -690,13 +1317,120 @@
             state.shippingPrice = '';
             document.getElementById('quote-customer').value = '';
             document.getElementById('quote-phone').value = '';
+            document.getElementById('quote-email').value = '';
+            document.getElementById('quote-address').value = '';
             
             state.step = 1;
             state.activeTab = 'history';
+            showToast('¡Cotización guardada exitosamente!');
             renderApp();
         };
 
-        // ==================== PLANTILLA DE RESUMEN (IMAGEN/MODAL) ====================
+        // ==================== PLANTILLA DE PDF ====================
+        const generatePDFHTML = (quote) => {
+            const hasServices = (quote.install && quote.install.name) || (quote.shipping && quote.shipping.name) || quote.caract1 || quote.caract2 || quote.caracteristica1 || quote.caracteristica2;
+            
+            // Retrocompatibilidad
+            const srv1 = quote.install || quote.caract1;
+            const srv2 = quote.shipping || quote.caract2;
+            const old1 = quote.caracteristica1;
+            const old2 = quote.caracteristica2;
+
+            let servicesHtml = '';
+            if (hasServices) {
+                if (srv1) servicesHtml += `<tr class="border-b border-slate-100 text-sm"><td class="py-4 px-6 text-slate-600 font-medium" colspan="3">+ ${srv1.name}</td><td class="py-4 px-6 text-right font-bold text-slate-800">${formatCLP(srv1.price || 0)}</td></tr>`;
+                if (srv2) servicesHtml += `<tr class="border-b border-slate-100 text-sm"><td class="py-4 px-6 text-slate-600 font-medium" colspan="3">+ ${srv2.name}</td><td class="py-4 px-6 text-right font-bold text-slate-800">${formatCLP(srv2.price || 0)}</td></tr>`;
+                if (old1) servicesHtml += `<tr class="border-b border-slate-100 text-sm"><td class="py-4 px-6 text-slate-600 font-medium" colspan="3">+ ${old1}</td><td class="py-4 px-6 text-right font-bold text-slate-800"></td></tr>`;
+                if (old2) servicesHtml += `<tr class="border-b border-slate-100 text-sm"><td class="py-4 px-6 text-slate-600 font-medium" colspan="3">+ ${old2}</td><td class="py-4 px-6 text-right font-bold text-slate-800"></td></tr>`;
+            }
+
+            return `
+                <div class="bg-white p-12 pb-32 mx-auto text-left font-sans capture-target relative" style="width: 794px; min-height: 1123px; box-sizing: border-box;">
+                    <!-- Decoración Superior -->
+                    <div class="absolute top-0 left-0 right-0 h-4 bg-blue-700"></div>
+                    
+                    <!-- Header -->
+                    <div class="flex justify-between items-start mb-12 pt-4">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-blue-900 p-2 rounded-xl flex items-center justify-center w-16 h-16 shadow-sm">
+                                <img src="imgs/logo.png" alt="Sellder" class="w-full h-auto object-contain" onerror="this.style.display='none'">
+                            </div>
+                            <div>
+                                <h1 class="text-3xl font-extrabold text-blue-900 tracking-tight leading-none">Sellder</h1>
+                                <p class="text-xs text-slate-500 uppercase tracking-widest font-bold mt-1">Línea Blanca</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-4xl font-light text-slate-300 tracking-wider mb-2">COTIZACIÓN</h2>
+                            <p class="text-sm font-semibold text-slate-800">N° COT-${quote.id.slice(-6)}</p>
+                            <p class="text-sm text-slate-500 mt-1">Fecha: ${quote.date || new Date().toLocaleDateString('es-CL')}</p>
+                        </div>
+                    </div>
+
+                    <!-- Detalles del Cliente -->
+                    <div class="bg-slate-50/50 rounded-xl border border-slate-200 p-6 mb-10 shadow-sm">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Preparado para</h3>
+                        <p class="text-xl font-bold text-slate-900 mb-2">${quote.customer || "Cliente sin nombre"}</p>
+                        <div class="grid grid-cols-2 gap-x-8 gap-y-3 mt-4 text-sm">
+                            ${quote.phone ? `<div class="flex items-center text-slate-700"><span class="font-semibold text-slate-500 w-20">Teléfono:</span> ${quote.phone}</div>` : ''}
+                            ${quote.email ? `<div class="flex items-center text-slate-700"><span class="font-semibold text-slate-500 w-20">Correo:</span> ${quote.email}</div>` : ''}
+                            ${quote.address ? `<div class="col-span-2 flex items-start text-slate-700 mt-1"><span class="font-semibold text-slate-500 w-20 shrink-0">Dirección:</span> <span>${quote.address}</span></div>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Productos -->
+                    <div class="mb-10 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                                    <th class="py-4 px-6 font-bold border-b border-slate-200 w-16 text-center">Cant</th>
+                                    <th class="py-4 px-6 font-bold border-b border-slate-200">Descripción del Artículo</th>
+                                    <th class="py-4 px-6 font-bold border-b border-slate-200 text-right w-32">Precio Unit.</th>
+                                    <th class="py-4 px-6 font-bold border-b border-slate-200 text-right w-36">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${quote.items.map((item, index) => `
+                                    <tr class="${index !== quote.items.length - 1 || servicesHtml ? 'border-b border-slate-100' : ''} text-sm hover:bg-slate-50 transition-colors">
+                                        <td class="py-4 px-6 text-center font-semibold text-slate-600">${item.quantity}</td>
+                                        <td class="py-4 px-6 text-slate-900 font-medium">${item.name || 'Producto sin descripción'}</td>
+                                        <td class="py-4 px-6 text-right text-slate-500">${formatCLP(item.price || 0)}</td>
+                                        <td class="py-4 px-6 text-right font-bold text-slate-800">${formatCLP((item.price || 0) * item.quantity)}</td>
+                                    </tr>
+                                `).join('')}
+                                ${servicesHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Resumen de Totales -->
+                    <div class="flex justify-end">
+                        <div class="w-80 bg-slate-50 rounded-xl border border-slate-200 p-6 shadow-sm">
+                            <div class="flex justify-between items-center mb-4 text-sm text-slate-600">
+                                <span class="font-medium">Subtotal</span>
+                                <span class="font-semibold text-slate-800">${formatCLP(quote.total)}</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-5 text-sm text-slate-600">
+                                <span class="font-medium">Impuestos (0%)</span>
+                                <span class="font-semibold text-slate-800">$0</span>
+                            </div>
+                            <div class="pt-5 border-t border-slate-200 flex justify-between items-center">
+                                <span class="text-lg font-bold text-slate-900">Total Final</span>
+                                <span class="text-3xl font-black text-blue-700">${formatCLP(quote.total)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="absolute bottom-10 left-10 right-10 pt-6 border-t border-slate-200 text-center text-xs text-slate-400">
+                        <p class="font-medium text-slate-500">Cotización válida por 15 días desde su emisión.</p>
+                        <p class="mt-1">Si tiene alguna duda sobre esta cotización, por favor contáctenos. ¡Gracias por su preferencia!</p>
+                    </div>
+                </div>
+            `;
+        };
+
+        // ==================== PLANTILLA DE RESUMEN ====================
         const generateSummaryHTML = (quote) => {
             const hasServices = (quote.install && quote.install.name) || (quote.shipping && quote.shipping.name) || quote.caract1 || quote.caract2 || quote.caracteristica1 || quote.caracteristica2;
             
@@ -722,6 +1456,8 @@
                         <p class="text-[15px] font-medium text-slate-500 mb-1">Cliente</p>
                         <p class="text-[22px] font-bold text-[#1e293b] leading-tight">${quote.customer || "Sin nombre"}</p>
                         ${quote.phone ? `<p class="text-[16px] text-slate-600 mt-1">${quote.phone}</p>` : ''}
+                        ${quote.email ? `<p class="text-[14px] text-slate-500 mt-0.5">${quote.email}</p>` : ''}
+                        ${quote.address ? `<p class="text-[14px] text-slate-400 mt-0.5">${quote.address}</p>` : ''}
                         ${quote.date ? `<p class="text-[14px] text-slate-400 mt-1">${quote.date}</p>` : ''}
                     </div>
                     <hr class="border-slate-200 mb-6" />
@@ -730,8 +1466,8 @@
                         <div class="space-y-4">
                             ${quote.items.map(item => `
                                 <div class="flex justify-between items-start">
-                                    <span class="font-bold text-[#1e293b] text-[16px] pr-4">${item.quantity > 1 ? item.quantity + 'x ' : ''}${item.name}</span>
-                                    <span class="font-bold text-[#1e293b] text-[16px] whitespace-nowrap">${formatCLP(item.price * item.quantity)}</span>
+                                    <span class="font-bold text-[#1e293b] text-[16px] pr-4">${item.quantity > 1 ? item.quantity + 'x ' : ''}${item.name || 'Producto sin descripción'}</span>
+                                    <span class="font-bold text-[#1e293b] text-[16px] whitespace-nowrap">${(item.price || 0) > 0 ? formatCLP((item.price || 0) * item.quantity) : 'Por confirmar'}</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -763,42 +1499,45 @@
             state.quotes.forEach(quote => {
                 html += `
                     <div class="p-6 hover:bg-slate-50 transition-colors">
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                            <div>
-                                <h4 class="font-semibold text-slate-900 text-lg">${quote.customer}</h4>
-                                <div class="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                                    ${quote.phone ? `<span>Tel: ${quote.phone}</span>` : ''}
-                                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">${quote.date}</span>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="cursor-pointer" onclick="openModal('${quote.id}')">
+                                <p class="font-medium text-slate-900">${quote.customer}</p>
+                                <p class="text-sm text-slate-500">${quote.items.length} producto(s) · ${quote.date}</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg font-bold text-slate-900">${formatCLP(quote.total)}</span>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="openModal('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-colors" title="Ver detalle">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="downloadPDF('${quote.id}')" class="text-slate-400 hover:text-purple-600 p-1.5 rounded-md hover:bg-purple-50 transition-colors" title="Descargar PDF">
+                                        <i data-lucide="file-down" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="shareWhatsApp('${quote.id}')" class="text-slate-400 hover:text-green-600 p-1.5 rounded-md hover:bg-green-50 transition-colors" title="Enviar WhatsApp">
+                                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="shareEmail('${quote.id}')" class="text-slate-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-colors" title="Enviar Correo">
+                                        <i data-lucide="mail" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="deleteQuote('${quote.id}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors" title="Eliminar">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
                             </div>
-                            <div class="flex flex-col md:items-end gap-2 w-full md:w-auto">
-                                <div class="text-xl font-bold text-blue-900">${formatCLP(quote.total)}</div>
-                                <div class="flex gap-2">
-                                    <button onclick="openModal('${quote.id}')" class="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-600 hover:bg-slate-100">
-                                        <i data-lucide="eye" class="w-4 h-4 mr-1.5"></i> Ver Detalles
-                                    </button>
-                                    <button onclick="downloadQuote('${quote.id}')" class="inline-flex items-center rounded-md bg-purple-100 px-3 py-1 text-sm text-purple-900 hover:bg-purple-200">
-                                        <i data-lucide="download" class="w-4 h-4 mr-1.5"></i> Descargar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white border border-slate-100 rounded-md p-3">
-                            <p class="text-sm font-medium text-slate-600 mb-2">Resumen rápido:</p>
-                            <ul class="text-sm space-y-1">
-                                ${quote.items.map(item => `
-                                    <li class="flex justify-between text-slate-600">
-                                        <span>${item.quantity}x ${item.name}</span>
-                                        <span class="text-slate-400">${formatCLP(item.price * item.quantity)}</span>
-                                    </li>
-                                `).join('')}
-                            </ul>
                         </div>
                     </div>
                 `;
             });
+            
             list.innerHTML = html;
             lucide.createIcons();
+        };
+
+        const deleteQuote = (id) => {
+            state.quotes = state.quotes.filter(q => q.id !== id);
+            saveState();
+            renderHistory();
+            showToast('Cotización eliminada');
         };
 
         const openModal = (id) => {
@@ -807,6 +1546,7 @@
             state.selectedQuoteId = id;
             document.getElementById('modal-content').innerHTML = generateSummaryHTML(quote);
             document.getElementById('quote-modal').classList.remove('hidden');
+            lucide.createIcons();
         };
 
         const closeModal = () => {
@@ -814,31 +1554,126 @@
             state.selectedQuoteId = null;
         };
 
-        const downloadQuote = async (id) => {
-            const quote = state.quotes.find(q => q.id === id);
-            if (!quote) return;
-
-            // Renderizamos en el div oculto para garantizar el estilo sin afectar la UI visible
-            const hiddenCont = document.getElementById('hidden-capture-container');
-            hiddenCont.innerHTML = generateSummaryHTML(quote);
-            
-            // Pequeño delay para asegurar que el DOM se pintó
-            setTimeout(async () => {
-                try {
-                    const target = hiddenCont.querySelector('.capture-target');
-                    const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#f8fafc' });
-                    const link = document.createElement('a');
-                    link.download = `Cotizacion_${quote.customer.replace(/\s+/g, '_')}.png`;
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                    hiddenCont.innerHTML = ''; // Limpiar
-                } catch (err) {
-                    console.error("Error generando imagen", err);
-                }
-            }, 100);
+        // ==================== PDF GENERATION ====================
+        const createPDF = (quote) => {
+            return new Promise((resolve, reject) => {
+                const hiddenCont = document.getElementById('hidden-capture-container');
+                hiddenCont.innerHTML = generatePDFHTML(quote);
+                
+                setTimeout(async () => {
+                    try {
+                        const target = hiddenCont.querySelector('.capture-target');
+                        const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff' });
+                        
+                        const { jsPDF } = window.jspdf;
+                        const imgData = canvas.toDataURL('image/png');
+                        
+                        const imgWidth = 190;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        
+                        const pdf = new jsPDF('p', 'mm', 'a4');
+                        pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                        
+                        hiddenCont.innerHTML = '';
+                        resolve(pdf);
+                    } catch (err) {
+                        hiddenCont.innerHTML = '';
+                        reject(err);
+                    }
+                }, 150);
+            });
         };
 
-        // ==================== EVENT LISTENERS ESTATICOS ====================
+        const downloadPDF = async (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+            
+            showToast('Generando PDF...', 'info');
+            try {
+                const pdf = await createPDF(quote);
+                pdf.save(`Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`);
+                showToast('PDF descargado');
+            } catch (err) {
+                console.error("Error generando PDF", err);
+                showToast('Error al generar PDF', 'error');
+            }
+        };
+
+        // ==================== COMPARTIR WHATSAPP Y CORREO ====================
+        const generateQuoteText = (quote) => {
+            let text = `*Cotización Sellder*\\n`;
+            text += `─────────────────\\n`;
+            text += `*Cliente:* ${quote.customer}\\n`;
+            if (quote.phone) text += `*Tel:* ${quote.phone}\\n`;
+            if (quote.date) text += `*Fecha:* ${quote.date}\\n`;
+            text += `\\n*Productos:*\\n`;
+            quote.items.forEach(item => {
+                const qty = item.quantity > 1 ? `${item.quantity}x ` : '';
+                const price = (item.price || 0) > 0 ? formatCLP((item.price || 0) * item.quantity) : 'Por confirmar';
+                text += `• ${qty}${item.name || 'Producto'} → ${price}\\n`;
+            });
+            if (quote.install && quote.install.name) {
+                text += `\\n+ ${quote.install.name}: ${formatCLP(quote.install.price || 0)}`;
+            }
+            if (quote.shipping && quote.shipping.name) {
+                text += `\\n+ ${quote.shipping.name}: ${formatCLP(quote.shipping.price || 0)}`;
+            }
+            text += `\\n─────────────────\\n`;
+            text += `*Total Estimado:* ${formatCLP(quote.total)}\\n`;
+            return text;
+        };
+
+        const shareWhatsApp = async (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+            
+            showToast('Preparando documento...', 'info');
+            try {
+                const pdf = await createPDF(quote);
+                const pdfBlob = pdf.output('blob');
+                const file = new File([pdfBlob], `Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: `Cotización Sellder - ${quote.customer}`,
+                        text: `Adjunto cotización solicitada.`,
+                        files: [file]
+                    });
+                } else {
+                    // Fallback to text + URL si canShare no es soportado
+                    const text = generateQuoteText(quote);
+                    let phone = (quote.phone || '').replace(/\\D/g, '');
+                    if (phone && !phone.startsWith('56')) phone = '56' + phone;
+                    
+                    const url = phone 
+                        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+                        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    
+                    // Descargar el PDF para que lo tengan a mano
+                    pdf.save(`Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`);
+                    
+                    showToast('PDF descargado. Envíalo manualmente (archivos no soportados por navegador).', 'error');
+                    setTimeout(() => window.open(url, '_blank'), 2000);
+                }
+            } catch (err) {
+                console.error("Error al compartir", err);
+                showToast('Error al preparar el documento', 'error');
+            }
+        };
+
+        const shareEmail = (id) => {
+            const quote = state.quotes.find(q => q.id === id);
+            if (!quote) return;
+            
+            const subject = `Cotización - ${quote.customer}`;
+            const body = generateQuoteText(quote).replace(/\*/g, ''); // Sin markdown en email
+            const email = quote.email || '';
+            
+            const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoUrl;
+        };
+
+        // ==================== EVENT LISTENERS ====================
         const setupEventListeners = () => {
             // Login
             document.getElementById('login-form').addEventListener('submit', (e) => {
@@ -854,7 +1689,7 @@
                 }
             });
 
-            // Toggle Password visibility
+            // Toggle Password
             document.getElementById('toggle-pass').addEventListener('click', () => {
                 const input = document.getElementById('login-pass');
                 const icon = document.getElementById('eye-icon');
@@ -868,19 +1703,53 @@
                 lucide.createIcons();
             });
 
+            // Funciones de Sidebar Móvil
+            const overlay = document.getElementById('mobile-sidebar-overlay');
+            const sidebar = document.getElementById('mobile-sidebar');
+            
+            const openSidebar = () => {
+                overlay.classList.remove('hidden');
+                // Trigger reflow
+                void overlay.offsetWidth;
+                overlay.classList.remove('opacity-0');
+                sidebar.classList.remove('translate-x-full');
+            };
+            
+            const closeSidebar = () => {
+                overlay.classList.add('opacity-0');
+                sidebar.classList.add('translate-x-full');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+            };
+
+            document.getElementById('mobile-menu-btn').addEventListener('click', openSidebar);
+            document.getElementById('close-sidebar-btn').addEventListener('click', closeSidebar);
+            overlay.addEventListener('click', closeSidebar);
+
+            // Helper para la navegación
+            const navigateTo = (view) => {
+                state.currentView = view;
+                renderApp();
+                closeSidebar();
+            };
+
             // Navegación
             document.getElementById('nav-logout').addEventListener('click', () => {
                 state.isLoggedIn = false;
                 saveState();
                 checkAuth();
             });
-            document.getElementById('nav-products').addEventListener('click', () => {
-                state.currentView = 'products';
-                renderApp();
+            document.getElementById('sidebar-logout').addEventListener('click', () => {
+                state.isLoggedIn = false;
+                saveState();
+                checkAuth();
+                closeSidebar();
             });
-            document.getElementById('nav-quotes').addEventListener('click', () => {
-                state.currentView = 'quotes';
-                renderApp();
+
+            ['clients', 'products', 'quotes'].forEach(view => {
+                document.getElementById(`nav-${view}`).addEventListener('click', () => navigateTo(view));
+                document.getElementById(`sidebar-${view}`).addEventListener('click', () => navigateTo(view));
             });
             document.getElementById('tab-new').addEventListener('click', () => {
                 state.activeTab = 'new';
@@ -906,15 +1775,74 @@
                 });
                 saveState();
                 renderProductsTable();
+                showToast('Producto agregado');
                 
                 nameInput.value = '';
                 priceInput.value = '';
                 catInput.value = '';
             });
 
-            // Botón descargar desde el modal
-            document.getElementById('modal-download-btn').addEventListener('click', () => {
-                if (state.selectedQuoteId) downloadQuote(state.selectedQuoteId);
+            // Agregar Cliente (vista Clientes)
+            document.getElementById('add-client-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addClient({
+                    name: document.getElementById('client-name').value,
+                    rut: document.getElementById('client-rut').value,
+                    address: document.getElementById('client-address').value,
+                    phone: document.getElementById('client-phone').value,
+                    comuna: document.getElementById('client-comuna').value,
+                    email: document.getElementById('client-email').value,
+                    project: document.getElementById('client-project').value
+                });
+                showToast('Cliente guardado');
+                renderClientsTable();
+                // Reset form
+                document.getElementById('add-client-form').reset();
+            });
+
+            // Búsqueda de clientes (vista Clientes)
+            document.getElementById('client-search').addEventListener('input', (e) => {
+                renderClientsTable(e.target.value.toLowerCase());
+            });
+
+            // Autocomplete clientes en wizard
+            document.getElementById('quote-client-search').addEventListener('input', handleClientSearch);
+            // Cerrar autocomplete al hacer click afuera
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('client-autocomplete');
+                const searchInput = document.getElementById('quote-client-search');
+                if (!dropdown.contains(e.target) && e.target !== searchInput) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            // Quick Client Modal form
+            document.getElementById('quick-client-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newClient = addClient({
+                    name: document.getElementById('qc-name').value,
+                    rut: document.getElementById('qc-rut').value,
+                    address: document.getElementById('qc-address').value,
+                    phone: document.getElementById('qc-phone').value,
+                    comuna: document.getElementById('qc-comuna').value,
+                    email: document.getElementById('qc-email').value,
+                    project: document.getElementById('qc-project').value
+                });
+                closeQuickClientModal();
+                selectClientForQuote(newClient.id);
+                showToast('Cliente creado y seleccionado');
+                document.getElementById('quick-client-form').reset();
+            });
+
+            // Modal buttons
+            document.getElementById('modal-pdf-btn').addEventListener('click', () => {
+                if (state.selectedQuoteId) downloadPDF(state.selectedQuoteId);
+            });
+            document.getElementById('modal-whatsapp-btn').addEventListener('click', () => {
+                if (state.selectedQuoteId) shareWhatsApp(state.selectedQuoteId);
+            });
+            document.getElementById('modal-email-btn').addEventListener('click', () => {
+                if (state.selectedQuoteId) shareEmail(state.selectedQuoteId);
             });
         };
     </script>
