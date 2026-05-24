@@ -18,6 +18,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+    <!-- UIBall Loaders -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/reuleaux.js"></script>
+
     <style>
         /* Animaciones base */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -477,22 +480,22 @@
                                 <label class="text-sm font-medium text-slate-700">Cantidad</label>
                                 <input type="number" id="quote-qty" min="1" value="1" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:ring-1 focus-visible:ring-blue-700">
                             </div>
-                            <button onclick="addQuoteItem()" class="w-full md:w-auto shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-100 text-purple-900 shadow-sm hover:bg-purple-200 h-9 px-4 py-2">
+                            <button onclick="addQuoteItem()" class="w-full md:w-auto shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium bg-purple-600 text-white shadow-md hover:bg-purple-700 active:scale-95 active:ring-2 active:ring-purple-400 active:ring-offset-2 transition-all h-9 px-4 py-2">
                                 <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Añadir
                             </button>
                         </div>
 
                         <!-- Agregar línea libre -->
                         <div class="flex justify-center">
-                            <button onclick="addFreeLineItem()" class="inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md px-4 py-2 transition-colors">
+                            <button onclick="openFreeLineModal()" class="inline-flex items-center gap-2 text-sm font-medium text-white bg-blue-600 shadow-md hover:bg-blue-700 active:scale-95 active:ring-2 active:ring-blue-400 active:ring-offset-2 transition-all rounded-md px-4 py-2">
                                 <i data-lucide="pencil-line" class="w-4 h-4"></i>
                                 + Línea libre (sin SKU)
                             </button>
                         </div>
 
                         <!-- Tabla de items -->
-                        <div id="quote-items-container" class="border border-slate-200 rounded-lg overflow-hidden hidden">
-                            <table class="w-full text-sm text-left">
+                        <div id="quote-items-container" class="border border-slate-200 rounded-lg overflow-x-auto hidden">
+                            <table class="w-full min-w-[600px] text-sm text-left">
                                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
                                     <tr>
                                         <th class="px-4 py-2 font-medium" style="min-width:200px">Descripción</th>
@@ -692,6 +695,53 @@
         </div>
     </div>
 
+    <!-- ==================== MODAL LÍNEA LIBRE ==================== -->
+    <div id="free-line-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm transition-all hidden">
+        <div class="bg-white rounded-xl shadow-xl max-w-sm w-full max-h-[90vh] overflow-y-auto relative animate-in zoom-in">
+            <button onclick="closeFreeLineModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1 transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="p-6">
+                <h3 class="font-semibold text-slate-900 text-lg mb-1 flex items-center gap-2">
+                    <i data-lucide="pencil-line" class="w-5 h-5 text-blue-700"></i>
+                    Añadir Línea Libre
+                </h3>
+                <p class="text-sm text-slate-500 mb-5">Ingrese los detalles del producto o servicio adicional.</p>
+                <form id="free-line-form" class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-slate-700">Descripción <span class="text-red-400">*</span></label>
+                        <input type="text" id="fl-name" required placeholder="Ej: Adaptador de gas" class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-700">Cantidad <span class="text-red-400">*</span></label>
+                            <input type="number" id="fl-qty" min="1" value="1" required class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-700">Precio Unitario <span class="text-red-400">*</span></label>
+                            <input type="number" id="fl-price" value="0" required class="flex h-9 w-full rounded-md border border-slate-200 px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full mt-4 inline-flex items-center justify-center rounded-md text-sm font-medium bg-blue-700 text-white shadow hover:bg-blue-800 h-9 px-4 py-2">
+                        Añadir a Cotización
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- ==================== LOADER OVERLAY ==================== -->
+    <div id="loader-overlay" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-opacity opacity-0 pointer-events-none hidden">
+        <l-reuleaux
+          size="50"
+          stroke="5"
+          stroke-length="0.15"
+          bg-opacity="0.1"
+          speed="1.2" 
+          color="#6c20df" 
+        ></l-reuleaux>
+        <p class="text-white mt-5 font-medium tracking-wide">Preparando documento...</p>
+    </div>
+
     <!-- Contenedor oculto para PDF/captura -->
     <div id="hidden-capture-container" class="fixed top-0 left-0 w-[500px] z-[-10] opacity-0 pointer-events-none"></div>
 
@@ -747,6 +797,23 @@
             toast.innerHTML = `<span>${message}</span>`;
             document.body.appendChild(toast);
             setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+        };
+
+        // ==================== LOADER ====================
+        const showLoader = (text = 'Preparando documento...') => {
+            const overlay = document.getElementById('loader-overlay');
+            overlay.querySelector('p').textContent = text;
+            overlay.classList.remove('hidden');
+            void overlay.offsetWidth; // Trigger reflow
+            overlay.classList.remove('opacity-0');
+            overlay.classList.remove('pointer-events-none');
+        };
+
+        const hideLoader = () => {
+            const overlay = document.getElementById('loader-overlay');
+            overlay.classList.add('opacity-0');
+            overlay.classList.add('pointer-events-none');
+            setTimeout(() => overlay.classList.add('hidden'), 300);
         };
 
         // ==================== INICIALIZACIÓN ====================
@@ -1271,21 +1338,16 @@
             updateLiveSummary();
         };
 
-        const addFreeLineItem = () => {
-            state.currentItems.push({
-                productId: 'free_' + Date.now(),
-                name: '',
-                price: 0,
-                quantity: 1,
-                isFreeLine: true
-            });
-            renderQuoteItems();
-            updateLiveSummary();
-            // Focus on the new name field
-            setTimeout(() => {
-                const nameInput = document.getElementById(`item-name-${state.currentItems.length - 1}`);
-                if (nameInput) nameInput.focus();
-            }, 50);
+        const openFreeLineModal = () => {
+            document.getElementById('fl-name').value = '';
+            document.getElementById('fl-qty').value = '1';
+            document.getElementById('fl-price').value = '0';
+            document.getElementById('free-line-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('fl-name').focus(), 50);
+        };
+        
+        const closeFreeLineModal = () => {
+            document.getElementById('free-line-modal').classList.add('hidden');
         };
 
         const removeQuoteItem = (idx) => {
@@ -1560,6 +1622,15 @@
                 const hiddenCont = document.getElementById('hidden-capture-container');
                 hiddenCont.innerHTML = generatePDFHTML(quote);
                 
+                // Parche Vercel Toolbar / oklch: deshabilitar temporalmente los <style> que contengan oklch
+                const badStyles = [];
+                document.querySelectorAll('style').forEach(el => {
+                    if (el.innerHTML.includes('oklch') || el.innerHTML.includes('color-mix')) {
+                        badStyles.push({ el, disabled: el.disabled });
+                        el.disabled = true;
+                    }
+                });
+                
                 setTimeout(async () => {
                     try {
                         const target = hiddenCont.querySelector('.capture-target');
@@ -1575,9 +1646,11 @@
                         pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
                         
                         hiddenCont.innerHTML = '';
+                        badStyles.forEach(s => s.el.disabled = s.disabled);
                         resolve(pdf);
                     } catch (err) {
                         hiddenCont.innerHTML = '';
+                        badStyles.forEach(s => s.el.disabled = s.disabled);
                         reject(err);
                     }
                 }, 150);
@@ -1588,38 +1661,40 @@
             const quote = state.quotes.find(q => q.id === id);
             if (!quote) return;
             
-            showToast('Generando PDF...', 'info');
+            showLoader('Generando PDF...');
             try {
                 const pdf = await createPDF(quote);
-                pdf.save(`Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`);
+                pdf.save(`Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`);
                 showToast('PDF descargado');
             } catch (err) {
                 console.error("Error generando PDF", err);
                 showToast('Error al generar PDF', 'error');
+            } finally {
+                hideLoader();
             }
         };
 
         // ==================== COMPARTIR WHATSAPP Y CORREO ====================
         const generateQuoteText = (quote) => {
-            let text = `*Cotización Sellder*\\n`;
-            text += `─────────────────\\n`;
-            text += `*Cliente:* ${quote.customer}\\n`;
-            if (quote.phone) text += `*Tel:* ${quote.phone}\\n`;
-            if (quote.date) text += `*Fecha:* ${quote.date}\\n`;
-            text += `\\n*Productos:*\\n`;
+            let text = `*Cotización Sellder*\n`;
+            text += `─────────────────\n`;
+            text += `*Cliente:* ${quote.customer}\n`;
+            if (quote.phone) text += `*Tel:* ${quote.phone}\n`;
+            if (quote.date) text += `*Fecha:* ${quote.date}\n`;
+            text += `\n*Productos:*\n`;
             quote.items.forEach(item => {
                 const qty = item.quantity > 1 ? `${item.quantity}x ` : '';
                 const price = (item.price || 0) > 0 ? formatCLP((item.price || 0) * item.quantity) : 'Por confirmar';
-                text += `• ${qty}${item.name || 'Producto'} → ${price}\\n`;
+                text += `• ${qty}${item.name || 'Producto'} → ${price}\n`;
             });
             if (quote.install && quote.install.name) {
-                text += `\\n+ ${quote.install.name}: ${formatCLP(quote.install.price || 0)}`;
+                text += `\n+ ${quote.install.name}: ${formatCLP(quote.install.price || 0)}`;
             }
             if (quote.shipping && quote.shipping.name) {
-                text += `\\n+ ${quote.shipping.name}: ${formatCLP(quote.shipping.price || 0)}`;
+                text += `\n+ ${quote.shipping.name}: ${formatCLP(quote.shipping.price || 0)}`;
             }
-            text += `\\n─────────────────\\n`;
-            text += `*Total Estimado:* ${formatCLP(quote.total)}\\n`;
+            text += `\n─────────────────\n`;
+            text += `*Total Estimado:* ${formatCLP(quote.total)}\n`;
             return text;
         };
 
@@ -1627,11 +1702,11 @@
             const quote = state.quotes.find(q => q.id === id);
             if (!quote) return;
             
-            showToast('Preparando documento...', 'info');
+            showLoader('Preparando documento...');
             try {
                 const pdf = await createPDF(quote);
                 const pdfBlob = pdf.output('blob');
-                const file = new File([pdfBlob], `Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+                const file = new File([pdfBlob], `Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
 
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({
@@ -1642,7 +1717,7 @@
                 } else {
                     // Fallback to text + URL si canShare no es soportado
                     const text = generateQuoteText(quote);
-                    let phone = (quote.phone || '').replace(/\\D/g, '');
+                    let phone = (quote.phone || '').replace(/\D/g, '');
                     if (phone && !phone.startsWith('56')) phone = '56' + phone;
                     
                     const url = phone 
@@ -1650,7 +1725,7 @@
                         : `https://wa.me/?text=${encodeURIComponent(text)}`;
                     
                     // Descargar el PDF para que lo tengan a mano
-                    pdf.save(`Cotizacion_${quote.customer.replace(/\\s+/g, '_')}.pdf`);
+                    pdf.save(`Cotizacion_${quote.customer.replace(/\s+/g, '_')}.pdf`);
                     
                     showToast('PDF descargado. Envíalo manualmente (archivos no soportados por navegador).', 'error');
                     setTimeout(() => window.open(url, '_blank'), 2000);
@@ -1658,6 +1733,8 @@
             } catch (err) {
                 console.error("Error al compartir", err);
                 showToast('Error al preparar el documento', 'error');
+            } finally {
+                hideLoader();
             }
         };
 
@@ -1780,6 +1857,27 @@
                 nameInput.value = '';
                 priceInput.value = '';
                 catInput.value = '';
+            });
+
+            // Modal Línea Libre
+            document.getElementById('free-line-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('fl-name').value;
+                const qty = parseInt(document.getElementById('fl-qty').value) || 1;
+                const price = parseInt(document.getElementById('fl-price').value) || 0;
+                
+                state.currentItems.push({
+                    productId: 'free_' + Date.now(),
+                    name: name,
+                    price: price,
+                    quantity: qty,
+                    isFreeLine: true
+                });
+                
+                renderQuoteItems();
+                updateLiveSummary();
+                closeFreeLineModal();
+                showToast('Línea libre agregada');
             });
 
             // Agregar Cliente (vista Clientes)
